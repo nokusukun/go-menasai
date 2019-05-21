@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"time"
 
-	rtypes "github.com/go-ego/riot/types"
 	"gitlab.com/nokusukun/go-menasai/chunk"
 )
 
@@ -24,7 +23,7 @@ func benchmark(prefix string, target func()) {
 	start := time.Now()
 	target()
 	end := time.Now()
-	fmt.Printf("%v: %v\n", prefix, end.Sub(start))
+	fmt.Printf("[Benchmark]%v: %v\n", prefix, end.Sub(start))
 }
 
 func main() {
@@ -75,19 +74,32 @@ func main() {
 	<-commitWait
 	myChunk.FlushSE()
 
-	benchmark("lookup", func() {
-		result := myChunk.SearchIndex(SearchQ)
-		var data chan *chunk.Document
+	// benchmark("lookup", func() {
+	// 	result := myChunk.SearchIndex(SearchQ)
+	// 	var data chan *chunk.Document
 
-		for _, res := range result.Docs.(rtypes.ScoredDocs) {
-			code := res.ScoredID.DocId
-			//fmt.Println("Result: ", code)
-			data = myChunk.GetAsync(code)
-			n := <-data
-			exported := n.ExportI().(DjaliListing)
-			fmt.Printf("\nRetrieved Exported Data: %v\n", exported.Title)
+	// 	for _, res := range result.Docs.(rtypes.ScoredDocs) {
+	// 		code := res.ScoredID.DocId
+	// 		//fmt.Println("Result: ", code)
+	// 		data = myChunk.GetAsync(code)
+	// 		n := <-data
+	// 		exported := DjaliListing{}
+	// 		n.Export(&exported)
+	// 		fmt.Printf("\nRetrieved Exported Data: %v\n", exported.Title)
+	// 	}
+	// 	fmt.Println("Result count: ", result.NumDocs)
+	// })
+
+	benchmark("filter", func() {
+		res := myChunk.Filter(
+			`contains(doc.slug, "comic") && doc.price.amount > 600`,
+		)
+		fmt.Printf("Filter Result: %v\n", len(res))
+		for _, doc := range res {
+			document := DjaliListing{}
+			doc.Export(&document)
+			fmt.Printf("Result: %v\n", document.Title)
 		}
-		fmt.Println("Result count: ", result.NumDocs)
 	})
 
 	// benchmark("retrieval", func() {

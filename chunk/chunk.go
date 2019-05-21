@@ -1,18 +1,22 @@
 package chunk
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/PaesslerAG/gval"
 	"github.com/go-ego/riot"
 	rtypes "github.com/go-ego/riot/types"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/yalp/jsonpath"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 type Chunk struct {
 	Store        []*Document `json:"documents"`
@@ -21,6 +25,7 @@ type Chunk struct {
 	aJobs        chan func()
 	indexFilters []jsonpath.FilterFunc
 	searchEngine *riot.Engine
+	EvalEngine   gval.Language
 }
 
 type Config struct {
@@ -31,8 +36,8 @@ type Config struct {
 }
 
 type Document struct {
-	ID      string      `json:"id"`
-	Content interface{} `json:"body"`
+	ID      string `json:"id"`
+	Content []byte `json:"body"`
 }
 
 // CreateChunk - Creates a chunk based on a specified id and path,
@@ -66,24 +71,6 @@ func LoadChunk(path string) (*Chunk, error) {
 	return newChunk, nil
 }
 
-// Initialize - Initializes the chunk services, like the search handler.
-//		Should be managed by the chunk manager.
-// 	TODO - Chunk manager should be the one managing the search engine.
-func (c *Chunk) Initialize() {
-	c.runAsyncScheduler()
-	for _, filterPath := range c.Config.IndexPaths {
-		filter, _ := jsonpath.Prepare(filterPath)
-		c.indexFilters = append(c.indexFilters, filter)
-	}
-
-	c.searchEngine = &riot.Engine{}
-	c.searchEngine.Init(rtypes.EngineOpts{
-		NotUseGse:   false,
-		UseStore:    true,
-		StoreFolder: c.Config.IndexDir,
-	})
-}
-
 // FlushSE flushes the index
 func (c *Chunk) FlushSE() {
 	c.searchEngine.Flush()
@@ -108,11 +95,64 @@ func (c *Chunk) insertOneIndex(id string, value string) {
 	c.searchEngine.Index(id, rtypes.DocData{Content: value})
 }
 
+// Initialize - Initializes the chunk services, like the search handler.
+//		Should be managed by the chunk manager.
+// 	TODO - Chunk manager should be the one managing the search engine.
+func (c *Chunk) Initialize() {
+	c.runAsyncScheduler()
+	for _, filterPath := range c.Config.IndexPaths {
+		filter, _ := jsonpath.Prepare(filterPath)
+		c.indexFilters = append(c.indexFilters, filter)
+	}
+
+	c.searchEngine = &riot.Engine{}
+	c.searchEngine.Init(rtypes.EngineOpts{
+		NotUseGse:   false,
+		UseStore:    true,
+		StoreFolder: c.Config.IndexDir,
+	})
+
+	c.EvalEngine = gval.Full(
+		gval.Function("contains", func(fullstr string, substr string) bool {
+			return strings.Contains(fullstr, substr)
+		}),
+	)
+}
+
+func (c *Chunk) Filter(query string) []*Document {
+	toreturn := []*Document{}
+	eval, err := c.EvalEngine.NewEvaluable(query)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	for _, doc := range c.Store {
+		mapdoc := make(map[string]interface{})
+		json.Unmarshal(doc.Content, &mapdoc)
+		// fmt.Println(mapdoc)
+		value, err := eval(context.Background(), map[string]interface{}{
+			"doc": mapdoc,
+		})
+		if err != nil {
+			fmt.Println(err)
+		}
+		//fmt.Println(value)
+		if value.(bool) {
+			toreturn = append(toreturn, doc)
+		}
+	}
+	return toreturn
+}
+
 // StoreCount returns how many items are in the store
 func (c *Chunk) StoreCount() int {
 	return len(c.Store)
 }
 
+// runAsyncScheduler runs the scheduler service that multiplexes the
+//		processes to run on only one goroutine.
+//		Slower but extremely thread safe.
 func (c *Chunk) runAsyncScheduler() {
 	c.aJobs = make(chan func(), 1000)
 	go func() {
@@ -143,22 +183,22 @@ func (c *Chunk) Insert(value interface{}, addToIndex ...bool) (string, error) {
 	}
 
 	ID := c.makeID()
-	// asJSON, err := json.Marshal(value)
-	//if err != nil {
-	//	return "", err
-	//}
-	doc := Document{ID: ID, Content: value}
+	asJSON, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	doc := Document{ID: ID, Content: asJSON}
 	c.Store = append(c.Store, &doc)
 
 	// Add to index
 	if addIndex {
-		asJSON, err := json.Marshal(value)
-		if err != nil {
-			panic(err)
-		}
+		// Unmarshals the marshalled json into a generic map[interface{}]
+		// the filter only works on that.
 		var eInterf interface{}
 		json.Unmarshal(asJSON, &eInterf)
 		indices := []string{}
+		// Loop through the chunk's index filters and append it to
+		//		the text search engine
 		for _, indexFilter := range c.indexFilters {
 			jval, err := indexFilter(eInterf)
 			if err == nil {
@@ -230,8 +270,7 @@ func (c *Chunk) CommitAsync() chan error {
 
 // Export exports the Document to a specified interface, like json.Unmarshal
 func (d *Document) Export(interf interface{}) {
-	x, _ := json.Marshal(d.Content)
-	json.Unmarshal(x, interf)
+	json.Unmarshal(d.Content, interf)
 }
 
 // ExportI returns the document as an interface{}, cast it using `result.(OriginalType)`

@@ -78,7 +78,7 @@ func (c *Chunk) FlushSE() {
 
 // SearchIndex searches the search engine for a specified string.
 //		Incomplete implementation, todo implement the rest
-func (c *Chunk) SearchIndex(val string) rtypes.SearchResp {
+func (c *Chunk) SearchIndex(val string) []*Document {
 	// Implement this
 	// for _, res := range result.Docs.(rtypes.ScoredDocs) {
 	// 	code := res.ScoredID.DocId
@@ -86,7 +86,15 @@ func (c *Chunk) SearchIndex(val string) rtypes.SearchResp {
 	// 	data = myChunk.GetAsync(code)
 	// 	n := <-data
 	// 	exported := n.ExportI().(DjaliListing)
-	return c.searchEngine.Search(rtypes.SearchReq{Text: val})
+	toreturn := []*Document{}
+	result := c.searchEngine.Search(rtypes.SearchReq{Text: val})
+	for _, res := range result.Docs.(rtypes.ScoredDocs) {
+		code := res.ScoredID.DocId
+		data := c.GetAsync(code)
+		toreturn = append(toreturn, <-data)
+	}
+
+	return toreturn
 }
 
 func (c *Chunk) insertOneIndex(id string, value string) {
@@ -204,7 +212,7 @@ func (c *Chunk) Insert(value interface{}, addToIndex ...bool) (string, error) {
 			if err == nil {
 				indices = append(indices, fmt.Sprintf("%v", jval))
 			} else {
-				panic(err)
+				fmt.Printf("Indexing failed: %v\n", err)
 			}
 		}
 		c.insertOneIndex(ID, fmt.Sprint(indices))
@@ -284,4 +292,46 @@ func (d *Document) MarshalJSON() ([]byte, error) {
 		d.ID,
 		d.Content,
 	})
+}
+
+// TransDocArrtoJSON transforms an array of documents to JSON
+func TransDocArrtoJSON(documents []*Document) ([]byte, error) {
+	results := []interface{}{}
+	for _, doc := range documents {
+		tmpinterf := new(interface{})
+		json.Unmarshal(doc.Content, &tmpinterf)
+		results = append(results, tmpinterf)
+	}
+	return json.Marshal(results)
+}
+
+// FilterCollection filters a collection
+func (c *Chunk) FilterCollection(collection []*Document, query string) []*Document {
+	fmt.Println("Loading Filter", query)
+	query = fmt.Sprintf("%v", query)
+	toreturn := []*Document{}
+	eval, err := c.EvalEngine.NewEvaluable(query)
+
+	if err != nil {
+		fmt.Println("Failed to load filter: ", err)
+	}
+
+	for _, doc := range collection {
+		mapdoc := make(map[string]interface{})
+		json.Unmarshal(doc.Content, &mapdoc)
+
+		value, err := eval(context.Background(), map[string]interface{}{
+			"doc": mapdoc,
+		})
+
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		// fmt.Println("Result", value)
+		if value.(bool) {
+			toreturn = append(toreturn, doc)
+		}
+	}
+	return toreturn
 }

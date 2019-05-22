@@ -91,7 +91,8 @@ func main() {
 	// })
 
 	benchmark("filter", func() {
-		res := myChunk.Filter(
+		res := myChunk.FilterCollection(
+			myChunk.Store,
 			`contains(doc.slug, "comic") && doc.price.amount > 600`,
 		)
 		fmt.Printf("Filter Result: %v\n", len(res))

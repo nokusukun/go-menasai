@@ -79,13 +79,6 @@ func (c *Chunk) FlushSE() {
 // SearchIndex searches the search engine for a specified string.
 //		Incomplete implementation, todo implement the rest
 func (c *Chunk) SearchIndex(val string) []*Document {
-	// Implement this
-	// for _, res := range result.Docs.(rtypes.ScoredDocs) {
-	// 	code := res.ScoredID.DocId
-	// 	//fmt.Println("Result: ", code)
-	// 	data = myChunk.GetAsync(code)
-	// 	n := <-data
-	// 	exported := n.ExportI().(DjaliListing)
 	toreturn := []*Document{}
 	result := c.searchEngine.Search(rtypes.SearchReq{Text: val})
 	for _, res := range result.Docs.(rtypes.ScoredDocs) {
@@ -103,8 +96,12 @@ func (c *Chunk) insertOneIndex(id string, value string) {
 	c.searchEngine.Index(id, rtypes.DocData{Content: value})
 }
 
+func (c *Chunk) OverrideEvalEngine(engine gval.Language) {
+	c.EvalEngine = engine
+}
+
 // Initialize - Initializes the chunk services, like the search handler.
-//		Should be managed by the chunk manager.
+//	Should be managed by the chunk manager.
 // 	TODO - Chunk manager should be the one managing the search engine.
 func (c *Chunk) Initialize() {
 	c.runAsyncScheduler()
@@ -129,7 +126,7 @@ func (c *Chunk) Initialize() {
 
 func (c *Chunk) Filter(query string) []*Document {
 	toreturn := []*Document{}
-	eval, err := c.EvalEngine.NewEvaluable(query)
+	eval, err := c.EvalEngine.NewEvaluable(fmt.Sprintf("%v", query))
 
 	if err != nil {
 		fmt.Println(err)
@@ -138,16 +135,19 @@ func (c *Chunk) Filter(query string) []*Document {
 	for _, doc := range c.Store {
 		mapdoc := make(map[string]interface{})
 		json.Unmarshal(doc.Content, &mapdoc)
-		// fmt.Println(mapdoc)
 		value, err := eval(context.Background(), map[string]interface{}{
 			"doc": mapdoc,
 		})
 		if err != nil {
 			fmt.Println(err)
 		}
-		//fmt.Println(value)
-		if value.(bool) {
-			toreturn = append(toreturn, doc)
+		fmt.Println(value)
+
+		val, ok := value.(bool)
+		if ok {
+			if val {
+				toreturn = append(toreturn, doc)
+			}
 		}
 	}
 	return toreturn
@@ -328,9 +328,11 @@ func (c *Chunk) FilterCollection(collection []*Document, query string) []*Docume
 			fmt.Println(err)
 		}
 
-		// fmt.Println("Result", value)
-		if value.(bool) {
-			toreturn = append(toreturn, doc)
+		val, ok := value.(bool)
+		if ok {
+			if val {
+				toreturn = append(toreturn, doc)
+			}
 		}
 	}
 	return toreturn

@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 	"time"
 
-	"gitlab.com/nokusukun/go-menasai/chunk"
+	gomenasai "gitlab.com/nokusukun/go-menasai/manager"
 )
 
 var (
@@ -28,22 +28,17 @@ func benchmark(prefix string, target func()) {
 
 func main() {
 	// manager := chunk.ChunkManager{}
-	myChunk, err := chunk.CreateChunk(&chunk.Config{
-		ID:         "mychunk",
-		Path:       "myDatabase/chunks/001.chk",
-		IndexDir:   "myDatabase/chunks/index",
-		IndexPaths: []string{"$.description", "$.title"},
+	manager, err := gomenasai.New(&gomenasai.GomenasaiConfig{
+		Name:           "TestDB",
+		Path:           "testDB",
+		ChunkSizeLimit: 1024,
+		IndexPaths:     []string{"$.title", "$.description"},
 	})
 
 	if err != nil {
 		panic(err)
 	}
 
-	// resp, _ := http.Get("https://www.justice.gov/api/v1/blog_entries.json")
-	// jresp := JSONResponse{}
-	// defer resp.Body.Close()
-	// rawData, _ := ioutil.ReadAll(resp.Body)
-	// json.Unmarshal(rawData, &jresp)
 	jresp := []DjaliListing{}
 	rawData, _ := ioutil.ReadFile("testdatadjali.json")
 	err = json.Unmarshal(rawData, &jresp)
@@ -52,79 +47,89 @@ func main() {
 	}
 	resultCount := len(jresp)
 	iterations := 0
+	ids := []string{}
 	benchmark(fmt.Sprintf("Inserting %vx%v items", resultCount, iterations+1), func() {
 		for i := 0; i <= iterations; i++ {
 			for _, post := range jresp {
-				myChunk.InsertAsync(post, true)
+				id, err := manager.Insert(post)
+				if err != nil {
+					fmt.Printf("Error %v", err)
+				}
+				ids = append(ids, id)
+				//fmt.Println("Inserted:", id)
 			}
 		}
 	})
 
-	// myChunk = nil
+	manager.FlushSE()
 
-	// newChunk, err := chunk.LoadChunk("myDatabase/chunks/001.chk")
-	// if err != nil {
-	// 	panic(err)
-	// }
-	var commitWait chan error
-	benchmark("commit", func() {
-		fmt.Println("Commiting to cold storage.")
-		commitWait = myChunk.CommitAsync()
-	})
-	<-commitWait
-	myChunk.FlushSE()
-
-	// benchmark("lookup", func() {
-	// 	result := myChunk.SearchIndex(SearchQ)
-	// 	var data chan *chunk.Document
-
-	// 	for _, res := range result.Docs.(rtypes.ScoredDocs) {
-	// 		code := res.ScoredID.DocId
-	// 		//fmt.Println("Result: ", code)
-	// 		data = myChunk.GetAsync(code)
-	// 		n := <-data
-	// 		exported := DjaliListing{}
-	// 		n.Export(&exported)
-	// 		fmt.Printf("\nRetrieved Exported Data: %v\n", exported.Title)
-	// 	}
-	// 	fmt.Println("Result count: ", result.NumDocs)
-	// })
-
-	benchmark("filter", func() {
-		res := myChunk.FilterCollection(
-			myChunk.Store,
-			`contains(doc.slug, "comic") && doc.price.amount > 600`,
-		)
-		fmt.Printf("Filter Result: %v\n", len(res))
-		for _, doc := range res {
-			document := DjaliListing{}
-			doc.Export(&document)
-			fmt.Printf("Result: %v\n", document.Title)
+	benchmark("Retrieval", func() {
+		for _, id := range ids {
+			doc, err := manager.Get(id)
+			if err != nil {
+				fmt.Printf("Error %v", err)
+			}
+			djali := DjaliListing{}
+			doc.Export(&djali)
+			//fmt.Println(djali.ParentPeer)
 		}
 	})
 
-	// benchmark("retrieval", func() {
-	// 	var code string
-	// 	for i := 0; i <= 5; i++ {
-	// 		code = fmt.Sprintf("mychunk$%v", rand.Intn(len(myChunk.Store)-1))
-	// 		fmt.Printf("\nRetrieving %v\n", code)
-	// 		data = myChunk.GetAsync(code)
-	// 		// exported := User{}
-	// 		n := <-data
-	// 		// n.Export(&exported)
-	// 		exported := n.ExportI().(Result)
-	// 		fmt.Printf("Retrieved Exported Data: %v\n\n", exported.Title)
+	benchmark("Searching", func() {
+		docs := manager.Search("rolex watch").
+			Filter(`contains(doc.slug, "rolex")`).
+			Filter(`contains(doc.slug, "daytona")`).
+			Sort(`x.price.amount < y.price.amount`)
 
-	// 		//benchmark("export", func() {
-	// 		//
-	// 		//})
-	// 	}
-	// })
+		fmt.Println("Search and sort result for 'rolex watch': ", len(docs.Documents))
 
-	//fmt.Printf("Retrieved Data: %v\n", data)
-
-	benchmark("commit", func() {
-		commitWait = myChunk.CommitAsync()
+		for _, doc := range docs.Documents {
+			djali := DjaliListing{}
+			doc.Export(&djali)
+			fmt.Println(djali.Price, djali.Title)
+		}
+		// benchmark("Filtering", func() {
+		// 	docs.Filter(`contains(doc.slug, "fruit")`).Filter(`contains(doc.slug, "skateboard")`)
+		// 	fmt.Println("Filter result for 'fruit' & 'skateboard': ", len(docs.Documents))
+		// })
+		//
+		// benchmark("Exporting to JSON", func() {
+		// 	jsonData, _ := docs.ExportJSONArray()
+		// 	fmt.Println(string(jsonData)[:100], "...")
+		// })
 	})
-	<-commitWait
+	manager.Close()
+
+	benchmark("Loading new DB", func() {
+		manager, err = gomenasai.Load("testDB")
+		if err != nil {
+			panic(err)
+		}
+	})
+
+	benchmark("Searching", func() {
+		docs := manager.Search("rolex watch").
+			Filter(`contains(doc.slug, "rolex")`).
+			Filter(`contains(doc.slug, "daytona")`).
+			Sort(`x.price.amount < y.price.amount`)
+
+		fmt.Println("Search and sort result for 'rolex daytona': ", len(docs.Documents))
+
+		for _, doc := range docs.Documents {
+			djali := DjaliListing{}
+			doc.Export(&djali)
+			fmt.Println(djali.Price, djali.Title)
+		}
+		// benchmark("Filtering", func() {
+		// 	docs.Filter(`contains(doc.slug, "fruit")`).Filter(`contains(doc.slug, "skateboard")`)
+		// 	fmt.Println("Filter result for 'fruit' & 'skateboard': ", len(docs.Documents))
+		// })
+		//
+		// benchmark("Exporting to JSON", func() {
+		// 	jsonData, _ := docs.ExportJSONArray()
+		// 	fmt.Println(string(jsonData)[:100], "...")
+		// })
+	})
+
+	manager.Close()
 }

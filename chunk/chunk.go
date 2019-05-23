@@ -13,10 +13,11 @@ import (
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 type Chunk struct {
-	Store    []*Document `json:"documents"`
-	Config   *Config     `json:"config"`
-	aRunning bool
-	aJobs    chan func()
+	Store          map[string]*Document `json:"documents"`
+	Config         *Config              `json:"config"`
+	LastDocumentID string               `json:"lastdocadd"`
+	aRunning       bool
+	aJobs          chan func()
 }
 
 type Config struct {
@@ -38,6 +39,7 @@ func CreateChunk(config *Config) (*Chunk, error) {
 		return nil, err
 	}
 	ioutil.WriteFile(config.Path, chunkJSON, 1)
+	newChunk.Store = make(map[string]*Document)
 	newChunk.Initialize()
 	return newChunk, nil
 }
@@ -61,6 +63,7 @@ func LoadChunk(path string) (*Chunk, error) {
 //	Should be managed by the chunk manager.
 // 	TODO - Chunk manager should be the one managing the search engine.
 func (c *Chunk) Initialize() {
+
 	c.runAsyncScheduler()
 }
 
@@ -84,13 +87,15 @@ func (c *Chunk) runAsyncScheduler() {
 func (c *Chunk) makeID() string {
 	storeCount := c.StoreCount()
 	if storeCount == 0 {
-		return fmt.Sprintf("%v$%v", c.Config.ID, 1)
+		c.LastDocumentID = fmt.Sprintf("%v$%v", c.Config.ID, 1)
+		return c.LastDocumentID
 	}
-	lastDoc := c.Store[storeCount-1]
-	x := strings.Split(lastDoc.ID, "$")
+	lastDoc := c.LastDocumentID
+	x := strings.Split(lastDoc, "$")
 	nextID, _ := strconv.Atoi(x[1])
 	code := fmt.Sprintf("%v$%v", c.Config.ID, nextID+1)
 	//fmt.Println(code)
+	c.LastDocumentID = code
 	return code
 }
 
@@ -103,7 +108,8 @@ func (c *Chunk) Insert(value interface{}) (string, []byte, error) {
 		return "", nil, err
 	}
 	doc := Document{ID: ID, Content: asJSON}
-	c.Store = append(c.Store, &doc)
+	//c.Store = append(c.Store, &doc)
+	c.Store[ID] = &doc
 
 	return ID, asJSON, nil
 }
@@ -130,12 +136,14 @@ func (c *Chunk) InsertAsync(value interface{}) chan *ReturnAsync {
 
 // Get retrieves a document. Non thread safe.
 func (c *Chunk) Get(id string) *Document {
-	for _, doc := range c.Store {
-		if doc.ID == id {
-			return doc
-		}
-	}
-	return nil
+	//for _, doc := range c.Store {
+	//	if doc.ID == id {
+	//		return doc
+	//	}
+	//}
+	//return nil
+	doc := c.Store[id]
+	return doc
 }
 
 // GetAsync retrieves a document, returns a channel to recieve the document. Thread safe.
@@ -154,6 +162,29 @@ func (c *Chunk) GetAsync(id string) chan *ReturnAsync {
 		close(result)
 	}
 	return result
+}
+
+// Update changes the content of an ID
+func (c *Chunk) Update(olddoc *Document, content interface{}) ([]byte, error) {
+	ID := olddoc.ID
+	asJSON, err := json.Marshal(content)
+	if err != nil {
+		return nil, err
+	}
+	doc := Document{ID: ID, Content: asJSON}
+	//c.Store = append(c.Store, &doc)
+	c.Store[ID] = &doc
+
+	return asJSON, nil
+}
+
+// Delete deletes a Document ID from the chunk.
+func (c *Chunk) Delete(id string) error {
+	delete(c.Store, id)
+	if c.Store[id] != nil {
+		return fmt.Errorf("Failed to delete document: %v", c.Store[id])
+	}
+	return nil
 }
 
 // Commit immediately writes the contents to the file. Not thread safe.

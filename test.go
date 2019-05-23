@@ -4,26 +4,52 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
+	logger "log"
+	"os"
+	"path/filepath"
 	"time"
 
 	gomenasai "gitlab.com/nokusukun/go-menasai/manager"
 )
 
 var (
-	SearchQ string
+	BenchmarkStats []string
+	RGBFront       = "38"
+	RGBBack        = "48"
+	RGBReset       = "\033[0m"
+	logLevel       int
+	log            *logger.Logger
 )
 
 func init() {
-	flag.StringVar(&SearchQ, "q", "", "Query")
+	flag.IntVar(&logLevel, "l", 5, "Log level")
 	flag.Parse()
+	var trace io.Writer
+	if logLevel == 0 {
+		trace = ioutil.Discard
+	}
+	log = logger.New(trace, "", 0)
+}
+
+func col(r, g, b int, t string) string {
+	return fmt.Sprintf("\033[%v;2;%v;%v;%vm", t, r, g, b)
 }
 
 func benchmark(prefix string, target func()) {
 	start := time.Now()
 	target()
 	end := time.Now()
-	fmt.Printf("[Benchmark]%v: %v\n", prefix, end.Sub(start))
+	stat := fmt.Sprintf("\033[31;1;1m[Benchmark]%-20v:\033[0m %v\n", prefix, end.Sub(start))
+	BenchmarkStats = append(BenchmarkStats, stat)
+}
+
+func printBenchmarkStats() {
+	fmt.Println(col(123, 123, 200, RGBFront), "Benchmark Stats", RGBReset)
+	for _, i := range BenchmarkStats {
+		fmt.Print("🕒", i)
+	}
 }
 
 func main() {
@@ -31,7 +57,7 @@ func main() {
 	manager, err := gomenasai.New(&gomenasai.GomenasaiConfig{
 		Name:           "TestDB",
 		Path:           "testDB",
-		ChunkSizeLimit: 1024,
+		ChunkSizeLimit: 8000,
 		IndexPaths:     []string{"$.title", "$.description"},
 	})
 
@@ -48,12 +74,12 @@ func main() {
 	resultCount := len(jresp)
 	iterations := 0
 	ids := []string{}
-	benchmark(fmt.Sprintf("Inserting %vx%v items", resultCount, iterations+1), func() {
+	benchmark(fmt.Sprintf("Inserting %v items", resultCount), func() {
 		for i := 0; i <= iterations; i++ {
 			for _, post := range jresp {
 				id, err := manager.Insert(post)
 				if err != nil {
-					fmt.Printf("Error %v", err)
+					log.Printf("Error %v", err)
 				}
 				ids = append(ids, id)
 				//fmt.Println("Inserted:", id)
@@ -67,7 +93,7 @@ func main() {
 		for _, id := range ids {
 			doc, err := manager.Get(id)
 			if err != nil {
-				fmt.Printf("Error %v", err)
+				log.Printf("Error %v", err)
 			}
 			djali := DjaliListing{}
 			doc.Export(&djali)
@@ -76,17 +102,17 @@ func main() {
 	})
 
 	benchmark("Searching", func() {
-		docs := manager.Search("rolex watch").
+		docs := manager.Search("watch").
 			Filter(`contains(doc.slug, "rolex")`).
 			Filter(`contains(doc.slug, "daytona")`).
 			Sort(`x.price.amount < y.price.amount`)
 
-		fmt.Println("Search and sort result for 'rolex watch': ", len(docs.Documents))
+		log.Println("Search and sort result for 'rolex watch': ", len(docs.Documents))
 
 		for _, doc := range docs.Documents {
 			djali := DjaliListing{}
 			doc.Export(&djali)
-			fmt.Println(djali.Price, djali.Title)
+			log.Println(djali.Price, djali.Title)
 		}
 		// benchmark("Filtering", func() {
 		// 	docs.Filter(`contains(doc.slug, "fruit")`).Filter(`contains(doc.slug, "skateboard")`)
@@ -108,17 +134,17 @@ func main() {
 	})
 
 	benchmark("Searching", func() {
-		docs := manager.Search("rolex watch").
+		docs := manager.Search("watch").
 			Filter(`contains(doc.slug, "rolex")`).
 			Filter(`contains(doc.slug, "daytona")`).
 			Sort(`x.price.amount < y.price.amount`)
 
-		fmt.Println("Search and sort result for 'rolex daytona': ", len(docs.Documents))
+		log.Println("Search and sort result for 'rolex daytona': ", len(docs.Documents))
 
 		for _, doc := range docs.Documents {
 			djali := DjaliListing{}
 			doc.Export(&djali)
-			fmt.Println(djali.Price, djali.Title)
+			log.Println(djali.Price, djali.Title)
 		}
 		// benchmark("Filtering", func() {
 		// 	docs.Filter(`contains(doc.slug, "fruit")`).Filter(`contains(doc.slug, "skateboard")`)
@@ -132,4 +158,27 @@ func main() {
 	})
 
 	manager.Close()
+
+	func(dir string) error {
+		d, err := os.Open(dir)
+		if err != nil {
+			return err
+		}
+		defer d.Close()
+		names, err := d.Readdirnames(-1)
+		if err != nil {
+			return err
+		}
+		for _, name := range names {
+			err = os.RemoveAll(filepath.Join(dir, name))
+			if err != nil {
+				return err
+			}
+		}
+		os.RemoveAll(dir)
+		return nil
+	}("testdb")
+
+	printBenchmarkStats()
+	fmt.Println(col(100, 230, 90, RGBFront), "Test Complete ✅", RGBReset)
 }

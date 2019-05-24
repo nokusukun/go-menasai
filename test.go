@@ -29,6 +29,8 @@ func init() {
 	var trace io.Writer
 	if logLevel == 0 {
 		trace = ioutil.Discard
+	} else {
+		trace = os.Stdout
 	}
 	log = logger.New(trace, "", 0)
 }
@@ -137,9 +139,10 @@ func main() {
 		docs := manager.Search("watch").
 			Filter(`contains(doc.slug, "rolex")`).
 			Filter(`contains(doc.slug, "daytona")`).
-			Sort(`x.price.amount < y.price.amount`)
+			Sort(`x.price.amount < y.price.amount`).
+			Limit(10, 500)
 
-		log.Println("Search and sort result for 'rolex daytona': ", len(docs.Documents))
+		log.Println("Search, limit start-10;count-500 and sort result for 'watch': ", len(docs.Documents))
 
 		for _, doc := range docs.Documents {
 			djali := DjaliListing{}

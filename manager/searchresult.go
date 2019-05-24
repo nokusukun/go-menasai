@@ -79,6 +79,14 @@ func (sr *GomenasaiSearchResult) Sort(query string) *GomenasaiSearchResult {
 		}
 		return val
 	})
+	return sr
+}
 
+func (sr *GomenasaiSearchResult) Limit(start, count int) *GomenasaiSearchResult {
+	end := start + count
+	if end > len(sr.Documents) {
+		end = len(sr.Documents)
+	}
+	sr.Documents = sr.Documents[start:end]
 	return sr
 }

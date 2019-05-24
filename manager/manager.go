@@ -317,20 +317,20 @@ func (db *Gomenasai) Delete(id string) error {
 }
 
 // Update updates the document specified by a document ID
-func (db *Gomenasai) Update(doc *chunk.Document, content interface{}) error {
+func (db *Gomenasai) Update(docId string, content interface{}) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	idElems := strings.Split(doc.ID, "$")
+	idElems := strings.Split(docId, "$")
 	if len(idElems) != 2 {
-		return fmt.Errorf("Invalid document ID '%v'", doc.ID)
+		return fmt.Errorf("Invalid document ID '%v'", docId)
 	}
 	chunkID := idElems[0]
 	activeChunk := db.chunks[chunkID]
 
-	asJSON, err := activeChunk.Update(doc, content)
+	asJSON, err := activeChunk.Update(docId, content)
 
-	db.InsertIndex(doc.ID, asJSON)
+	db.InsertIndex(docId, asJSON)
 	return err
 }
 

@@ -186,7 +186,7 @@ func TestUpdate(t *testing.T) {
 
 	document.Title = "New Title"
 
-	err = manager.Update(rdoc, &document)
+	err = manager.Update(rdoc.ID, &document)
 
 	manager.Commit()
 

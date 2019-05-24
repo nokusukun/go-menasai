@@ -77,7 +77,7 @@ A compact performant nosql store with full text searching.
 
 	document.Title = "New Title"
 
-    err = manager.Update(rdoc, &document)
+    err = manager.Update(rdoc.ID, &document)
     
     // Delete
     err = manager.Delete("TestDB-0$1")

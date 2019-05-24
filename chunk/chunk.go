@@ -165,8 +165,7 @@ func (c *Chunk) GetAsync(id string) chan *ReturnAsync {
 }
 
 // Update changes the content of an ID
-func (c *Chunk) Update(olddoc *Document, content interface{}) ([]byte, error) {
-	ID := olddoc.ID
+func (c *Chunk) Update(ID string, content interface{}) ([]byte, error) {
 	asJSON, err := json.Marshal(content)
 	if err != nil {
 		return nil, err

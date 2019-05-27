@@ -6,6 +6,8 @@ import (
 	"log"
 	"sort"
 
+	"github.com/qntfy/kazaam"
+
 	"gitlab.com/nokusukun/go-menasai/chunk"
 )
 
@@ -57,6 +59,9 @@ func (sr *GomenasaiSearchResult) Filter(query string) *GomenasaiSearchResult {
 	return sr
 }
 
+// Sort sorts the results with a specified gval expression.
+// 		`Sort("x.price.amount < y.price.amount")`
+// 	Objects will be assigned to variable x and y
 func (sr *GomenasaiSearchResult) Sort(query string) *GomenasaiSearchResult {
 	eval, err := sr.Manager.EvalEngine.NewEvaluable(query)
 
@@ -82,11 +87,37 @@ func (sr *GomenasaiSearchResult) Sort(query string) *GomenasaiSearchResult {
 	return sr
 }
 
+// Limit truncates the results based on where to start the truncation and the count.
 func (sr *GomenasaiSearchResult) Limit(start, count int) *GomenasaiSearchResult {
 	end := start + count
 	if end > len(sr.Documents) {
 		end = len(sr.Documents)
 	}
 	sr.Documents = sr.Documents[start:end]
+	return sr
+}
+
+// Transform modifies the documents based on a Kazaam spec.
+func (sr *GomenasaiSearchResult) Transform(spec string) *GomenasaiSearchResult {
+	kz, err := kazaam.NewKazaam(spec)
+	if err != nil {
+		fmt.Println("Failed to load spec in transform: ", err, "\nspec: ", spec)
+		return sr
+	}
+	for idx, doc := range sr.Documents {
+		// Dereference from pointer to value
+		newdoc := *doc
+		// Transform the content of the document
+		cont, err := kz.TransformInPlace(newdoc.Content)
+		if err != nil {
+			fmt.Println("Failed to transform document", err)
+		}
+		// Overwrite the content with the transformed content
+		newdoc.Content = cont
+		// Flag the document to as a reexport
+		newdoc.Reexport()
+		// Overwrite the pointer of the old document to the new one
+		sr.Documents[idx] = &newdoc
+	}
 	return sr
 }

@@ -107,14 +107,23 @@ func main() {
 		docs := manager.Search("watch").
 			Filter(`contains(doc.slug, "rolex")`).
 			Filter(`contains(doc.slug, "daytona")`).
-			Sort(`x.price.amount < y.price.amount`)
+			Sort(`x.price.amount < y.price.amount`).
+			Transform(`[{
+				"operation": "shift",
+				"spec": {
+				  "title": "title",
+				  "owner": "parentPeer",
+				  "price": "price.amount"
+				}
+			  }]`)
 
 		log.Println("Search and sort result for 'rolex watch': ", len(docs.Documents))
 
 		for _, doc := range docs.Documents {
-			djali := DjaliListing{}
-			doc.Export(&djali)
-			log.Println(djali.Price, djali.Title)
+			//djali := DjaliListing{}
+			log.Println(doc.ExportI())
+			//doc.Export(&djali)
+			//log.Println(djali.Price, djali.Title)
 		}
 		// benchmark("Filtering", func() {
 		// 	docs.Filter(`contains(doc.slug, "fruit")`).Filter(`contains(doc.slug, "skateboard")`)

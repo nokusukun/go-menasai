@@ -21,6 +21,11 @@ func (d *Document) ExportI() map[string]interface{} {
 	return d.mapping
 }
 
+// Reexport marks the document as unmapped
+func (d *Document) Reexport() {
+	d.mapping = nil
+}
+
 // MarshalJSON is used by the internal marshaller.
 func (d *Document) MarshalJSON() ([]byte, error) {
 	return json.Marshal(Document{

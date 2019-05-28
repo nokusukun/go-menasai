@@ -217,13 +217,15 @@ func (db *Gomenasai) FlushSE() {
 	db.searchEngine.Flush()
 }
 
-// Searches the index for a query string, retuns a search object
+// Search searches the index for a query string, retuns a search object
 func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
 	toreturn := []*chunk.Document{}
 	if val == "" {
 		for _, c := range db.chunks {
 			for _, val := range c.Store {
-				toreturn = append(toreturn, val)
+				if val != nil {
+					toreturn = append(toreturn, val)
+				}
 			}
 		}
 		return &GomenasaiSearchResult{
@@ -235,7 +237,7 @@ func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
 	for _, res := range result.Docs.(rtypes.ScoredDocs) {
 		code := res.ScoredID.DocId
 		data, err := db.Get(code)
-		if err == nil {
+		if err == nil && data != nil {
 			toreturn = append(toreturn, data)
 		} else {
 			log.Printf("Failed to retrieve from index '%v': %v\n", data, err)

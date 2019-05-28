@@ -143,6 +143,7 @@ func (c *Chunk) Get(id string) *Document {
 	//}
 	//return nil
 	doc := c.Store[id]
+
 	return doc
 }
 

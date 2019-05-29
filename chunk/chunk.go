@@ -18,6 +18,7 @@ type Chunk struct {
 	LastDocumentID string               `json:"lastdocadd"`
 	aRunning       bool
 	aJobs          chan func()
+	initialized    bool
 }
 
 type Config struct {
@@ -44,19 +45,56 @@ func CreateChunk(config *Config) (*Chunk, error) {
 	return newChunk, nil
 }
 
-// LoadChunk loads an already existing chunk file.
+// LoadChunk lazily loads the chunk to the manager
 func LoadChunk(path string) (*Chunk, error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
+		panic(fmt.Errorf("'%v' does not exist, failed to load chunk", path))
 		return nil, fmt.Errorf("'%v' does not exist, failed to load chunk", path)
+	}
+	newChunk := Chunk{}
+	newChunk.Config = &Config{}
+	newChunk.Config.Path = path
+	newChunk.initialized = false
+	return &newChunk, nil
+}
+
+// LoadChunk loads an already existing chunk file.
+func (c *Chunk) internalLoadChunk() {
+	path := c.Config.Path
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		panic(fmt.Errorf("'%v' does not exist, failed to load chunk", path))
 	}
 	chunkBytes, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	newChunk := &Chunk{}
-	json.Unmarshal(chunkBytes, newChunk)
-	newChunk.Initialize()
-	return newChunk, nil
+	json.Unmarshal(chunkBytes, c)
+	c.Initialize()
+}
+
+func (c *Chunk) checkInit() {
+	if !c.initialized {
+		c.internalLoadChunk()
+
+		c.initialized = true
+		/**
+		 * If the line above is omitted.
+		 *  Benchmark Stats
+		 * 🕒[Benchmark]Load database       : 21.5311645s
+		 * 🕒[Benchmark]Search Adele        : 5.103234s
+		 * 🕒[Benchmark]Search Jergens      : 157.7796ms
+		 * 🕒[Benchmark]Search Adele Pt2    : 4.7570868s
+		 * 🕒[Benchmark]Search Jergens Pt2  : 355.4547ms
+		 * -----------
+		 * If not omitted
+		 *  Benchmark Stats
+		 * 🕒[Benchmark]Load database       : 22.4295377s
+		 * 🕒[Benchmark]Search Adele        : 19.5727ms
+		 * 🕒[Benchmark]Search Jergens      : 997.2µs
+		 * 🕒[Benchmark]Search Adele Pt2    : 21.9557ms
+		 * 🕒[Benchmark]Search Jergens Pt2  : 1.0058ms
+		 */
+	}
 }
 
 // Initialize - Initializes the chunk services, like the search handler.
@@ -69,6 +107,7 @@ func (c *Chunk) Initialize() {
 
 // StoreCount returns how many items are in the store
 func (c *Chunk) StoreCount() int {
+	c.checkInit()
 	return len(c.Store)
 }
 
@@ -85,6 +124,7 @@ func (c *Chunk) runAsyncScheduler() {
 }
 
 func (c *Chunk) makeID() string {
+	c.checkInit()
 	storeCount := c.StoreCount()
 	if storeCount == 0 {
 		c.LastDocumentID = fmt.Sprintf("%v$%v", c.Config.ID, 1)
@@ -101,7 +141,7 @@ func (c *Chunk) makeID() string {
 
 // Insert - Inserts an interface to the database
 func (c *Chunk) Insert(value interface{}) (string, []byte, error) {
-
+	c.checkInit()
 	ID := c.makeID()
 	asJSON, err := json.Marshal(value)
 	if err != nil {
@@ -109,6 +149,9 @@ func (c *Chunk) Insert(value interface{}) (string, []byte, error) {
 	}
 	doc := Document{ID: ID, Content: asJSON}
 	//c.Store = append(c.Store, &doc)
+	if c.Store == nil {
+		c.Store = make(map[string]*Document)
+	}
 	c.Store[ID] = &doc
 
 	return ID, asJSON, nil
@@ -121,6 +164,7 @@ type ReturnAsync struct {
 
 // InsertAsync - Asynchronously inserts data to the database, returns a channel with the ID
 func (c *Chunk) InsertAsync(value interface{}) chan *ReturnAsync {
+	c.checkInit()
 	result := make(chan *ReturnAsync, 1)
 	c.aJobs <- func() {
 		res, _, err := c.Insert(value)
@@ -136,6 +180,7 @@ func (c *Chunk) InsertAsync(value interface{}) chan *ReturnAsync {
 
 // Get retrieves a document. Non thread safe.
 func (c *Chunk) Get(id string) *Document {
+	c.checkInit()
 	//for _, doc := range c.Store {
 	//	if doc.ID == id {
 	//		return doc
@@ -149,6 +194,7 @@ func (c *Chunk) Get(id string) *Document {
 
 // GetAsync retrieves a document, returns a channel to recieve the document. Thread safe.
 func (c *Chunk) GetAsync(id string) chan *ReturnAsync {
+	c.checkInit()
 	result := make(chan *ReturnAsync, 1)
 	c.aJobs <- func() {
 		res := c.Get(id)
@@ -167,6 +213,7 @@ func (c *Chunk) GetAsync(id string) chan *ReturnAsync {
 
 // Update changes the content of an ID
 func (c *Chunk) Update(ID string, content interface{}) ([]byte, error) {
+	c.checkInit()
 	asJSON, err := json.Marshal(content)
 	if err != nil {
 		return nil, err
@@ -180,6 +227,7 @@ func (c *Chunk) Update(ID string, content interface{}) ([]byte, error) {
 
 // Delete deletes a Document ID from the chunk.
 func (c *Chunk) Delete(id string) error {
+	c.checkInit()
 	delete(c.Store, id)
 	if c.Store[id] != nil {
 		return fmt.Errorf("Failed to delete document: %v", c.Store[id])
@@ -189,6 +237,7 @@ func (c *Chunk) Delete(id string) error {
 
 // Commit immediately writes the contents to the file. Not thread safe.
 func (c *Chunk) Commit() error {
+	c.checkInit()
 	chunkJSON, err := json.Marshal(c)
 	if err != nil {
 		return err
@@ -200,20 +249,10 @@ func (c *Chunk) Commit() error {
 // CommitAsync waits for the pending write and get functions to finish before
 //		writing the contents to the file. Thread safe.
 func (c *Chunk) CommitAsync() chan error {
+	c.checkInit()
 	errorChannel := make(chan error)
 	go func() {
 		errorChannel <- c.Commit()
 	}()
 	return errorChannel
-}
-
-// TransDocArrtoJSON transforms an array of documents to JSON
-func TransDocArrtoJSON(documents []*Document) ([]byte, error) {
-	results := []interface{}{}
-	for _, doc := range documents {
-		tmpinterf := new(interface{})
-		json.Unmarshal(doc.Content, &tmpinterf)
-		results = append(results, tmpinterf)
-	}
-	return json.Marshal(results)
 }

@@ -145,13 +145,14 @@ func (db *Gomenasai) NewChunk() error {
 
 // LoadChunk loads an existing chunk. Called by
 // gomenasai.Initialize.
-func (db *Gomenasai) LoadChunk(path string) error {
-	chunk, err := chunk.LoadChunk(path)
+func (db *Gomenasai) LoadChunk(xpath string) error {
+	chunk, err := chunk.LoadChunk(xpath)
 	if err != nil {
 		panic(err)
 	}
-	chunk.Initialize()
-	db.chunks[chunk.Config.ID] = chunk
+	// chunk.Initialize()
+	_, chunkID := path.Split(xpath)
+	db.chunks[chunkID] = chunk
 	return nil
 }
 

@@ -11,6 +11,7 @@ A compact performant nosql store with full text searching.
 ```
 
 ## Usage
+Godoc: https://godoc.org/gitlab.com/nokusukun/go-menasai/manager
 ```golang
     var db *gomenasai.Gomenasai
     // Check if the database exists

@@ -58,7 +58,7 @@ A compact performant nosql store with full text searching.
     //      containing documents which matches on the index where 
     //      you can do more operations to the results returned.
 
-    log.Println("Search and sort result for 'watch' filtered by 'watch': ", len(docs.Documents))
+    log.Println("Search and sort result for 'watch' filtered by 'watch': ", len(result.Documents))
 
     // Exports the database into a JSONArray in which can be returned as an API response. 
     jsonData, _ := result.ExportJSONArray()

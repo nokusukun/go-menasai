@@ -45,9 +45,11 @@ Godoc: https://godoc.org/gitlab.com/nokusukun/go-menasai/manager
     // id: TestDB-0$1       // The document ID
     
     // Retrieving data by ID
-    emptyObject := SampleObject{}
+    doc := db.Get(id)
+    
     // Similar to json.Unmarshal
-    db.Get(id, &emptyObject)
+    emptyObject := SampleObject{}
+    doc.Export(&emptyObject)
 
     // Searching
     result := db.Search("watch").

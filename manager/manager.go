@@ -232,6 +232,7 @@ func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
 		return &GomenasaiSearchResult{
 			Documents: toreturn,
 			Manager:   db,
+			Count:     len(toreturn),
 		}
 	}
 	result := db.searchEngine.Search(rtypes.SearchReq{Text: val})
@@ -247,6 +248,7 @@ func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
 	return &GomenasaiSearchResult{
 		Documents: toreturn,
 		Manager:   db,
+		Count:     len(toreturn),
 	}
 }
 

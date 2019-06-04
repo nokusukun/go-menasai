@@ -14,6 +14,7 @@ import (
 type GomenasaiSearchResult struct {
 	Documents []*chunk.Document
 	Manager   *Gomenasai
+	Count     int
 }
 
 func (sr *GomenasaiSearchResult) ExportJSONArray() ([]byte, error) {
@@ -56,6 +57,7 @@ func (sr *GomenasaiSearchResult) Filter(query string) *GomenasaiSearchResult {
 		}
 	}
 	sr.Documents = toreturn
+	sr.Count = len(toreturn)
 	return sr
 }
 

@@ -1,9 +1,5 @@
 package main
 
-func init() {
-
-}
-
-func main() {
-
-}
+var (
+	DummyFile = "DummyFileGoesHere"
+)

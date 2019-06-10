@@ -29,6 +29,7 @@ type GomenasaiConfig struct {
 	Path           string   `json:"dbpath"`
 	ChunkSizeLimit int      `json:"chunkLimit"`
 	IndexPaths     []string `json:"indexPaths"`
+	NoIndex        bool     `json:"noIndex"`
 }
 
 // Gomenasai is a service that manages individual chunks
@@ -188,21 +189,23 @@ func (db *Gomenasai) Initialize() {
 		db.indexFilters = append(db.indexFilters, filter)
 	}
 
-	// Load up the text search engine
-	db.searchEngine = &riot.Engine{}
-	db.searchEngine.Init(rtypes.EngineOpts{
-		NotUseGse:   false,
-		UseStore:    true,
-		StoreFolder: db.Configuration.IndexDir,
-	})
+	if !db.Configuration.NoIndex {
+		// Load up the text search engine
+		db.searchEngine = &riot.Engine{}
+		db.searchEngine.Init(rtypes.EngineOpts{
+			NotUseGse:   false,
+			UseStore:    true,
+			StoreFolder: db.Configuration.IndexDir,
+		})
 
-	db.FlushSE()
-	go func() {
-		for {
-			time.Sleep(time.Second * 5)
-			db.FlushSE()
-		}
-	}()
+		db.FlushSE()
+		go func() {
+			for {
+				time.Sleep(time.Second * 5)
+				db.FlushSE()
+			}
+		}()
+	}
 
 	// Load up the EvaluationEngine for the filters.
 	db.EvalEngine = gval.Full(
@@ -214,14 +217,16 @@ func (db *Gomenasai) Initialize() {
 
 // FlushSE flushes the search engine index
 func (db *Gomenasai) FlushSE() {
-	db.searchEngine.FlushIndex()
-	db.searchEngine.Flush()
+	if !db.Configuration.NoIndex {
+		db.searchEngine.FlushIndex()
+		db.searchEngine.Flush()
+	}
 }
 
 // Search searches the index for a query string, retuns a search object
 func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
 	toreturn := []*chunk.Document{}
-	if val == "" {
+	if val == "" || db.Configuration.NoIndex {
 		for _, c := range db.chunks {
 			for _, val := range c.Store {
 				if val != nil {
@@ -256,7 +261,8 @@ func (db *Gomenasai) insertOneIndex(id string, index string) {
 	db.searchEngine.Index(id, rtypes.DocData{Content: index})
 }
 
-// Creates a new index based on the filters specified on the IndexPaths
+// InsertIndex Creates a new index based on the filters specified
+//  on the IndexPaths
 func (db *Gomenasai) InsertIndex(ID string, asJSON []byte) {
 	var eInterf interface{}
 	json.Unmarshal(asJSON, &eInterf)

@@ -192,11 +192,24 @@ func (db *Gomenasai) Initialize() {
 	if !db.Configuration.NoIndex {
 		// Load up the text search engine
 		db.searchEngine = &riot.Engine{}
-		db.searchEngine.Init(rtypes.EngineOpts{
-			NotUseGse:   false,
-			UseStore:    true,
-			StoreFolder: db.Configuration.IndexDir,
-		})
+		var options rtypes.EngineOpts
+
+		if _, err := os.Stat("dictionary.txt"); err == nil {
+			options = rtypes.EngineOpts{
+				NotUseGse:   false,
+				UseStore:    true,
+				StoreFolder: db.Configuration.IndexDir,
+				GseDict:     "dictionary.txt",
+			}
+		} else {
+			options = rtypes.EngineOpts{
+				NotUseGse:   false,
+				UseStore:    true,
+				StoreFolder: db.Configuration.IndexDir,
+			}
+		}
+
+		db.searchEngine.Init(options)
 
 		db.FlushSE()
 		go func() {

@@ -310,6 +310,9 @@ func (db *Gomenasai) Get(id string) (*chunk.Document, error) {
 	chunkID := idElems[0]
 	activeChunk := db.chunks[chunkID]
 	res := <-activeChunk.GetAsync(id)
+	if res.Content == nil {
+		return &chunk.Document{}, res.Error
+	}
 	return res.Content.(*chunk.Document), res.Error
 }
 

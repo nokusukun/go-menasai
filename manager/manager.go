@@ -260,7 +260,7 @@ func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
 		if err == nil && data != nil {
 			toreturn = append(toreturn, data)
 		} else {
-			log.Printf("Failed to retrieve from index '%v': %v\n", data, err)
+			log.Printf("Failed to retrieve from index '%v': %v\n", code, err)
 		}
 	}
 	return &GomenasaiSearchResult{
@@ -339,6 +339,7 @@ func (db *Gomenasai) Delete(id string) error {
 		return fmt.Errorf("Invalid document ID '%v'", id)
 	}
 	chunkID := idElems[0]
+	db.searchEngine.RemoveDoc(id, true)
 	activeChunk := db.chunks[chunkID]
 	return activeChunk.Delete(id)
 }

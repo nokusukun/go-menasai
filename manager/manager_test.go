@@ -75,7 +75,7 @@ func TestManager(t *testing.T) {
 	manager, err := gomenasai.New(&gomenasai.GomenasaiConfig{
 		Name:       "TestDB",
 		Path:       "test_database",
-		IndexPaths: []string{"$.title", "$.description"},
+		IndexPaths: []string{"$.title", "$.description", "$.hash"},
 	})
 
 	defer manager.Close()
@@ -209,6 +209,22 @@ func TestUpdate(t *testing.T) {
 		t.Errorf("Unexpected document title. Expected '%v' got '%v'", expected, newdocument.Title)
 	}
 
+}
+
+func TestSearch(t *testing.T) {
+	manager, err := gomenasai.Load("test_database")
+
+	defer manager.Close()
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	searchResult := manager.Search("Qmadgec6CBnGMhEyUurjey5tqkKHv935na5e5oxa1U4QKa")
+
+	if searchResult.Count == 0 {
+		t.Errorf("No document found, expected > 0\n")
+	}
 }
 
 func TestDelete(t *testing.T) {

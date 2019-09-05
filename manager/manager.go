@@ -9,13 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
-	rtypes "github.com/go-ego/riot/types"
+	"github.com/blevesearch/bleve"
 	jsoniter "github.com/json-iterator/go"
 
 	"github.com/PaesslerAG/gval"
-	"github.com/go-ego/riot"
+
 	"github.com/yalp/jsonpath"
 	"gitlab.com/nokusukun/go-menasai/chunk"
 )
@@ -40,7 +39,7 @@ type Gomenasai struct {
 
 	chunks       map[string]*chunk.Chunk
 	indexFilters []jsonpath.FilterFunc
-	searchEngine *riot.Engine
+	searchEngine bleve.Index
 	EvalEngine   gval.Language
 	lock         *sync.RWMutex
 }
@@ -190,34 +189,25 @@ func (db *Gomenasai) Initialize() {
 	}
 
 	if !db.Configuration.NoIndex {
-		// Load up the text search engine
-		db.searchEngine = &riot.Engine{}
-		var options rtypes.EngineOpts
+		idxPath := path.Join(db.Configuration.Path, "index.db")
+		dbAlreadyExists := doesFileExist(idxPath)
+		fmt.Println(idxPath)
 
-		if _, err := os.Stat("dictionary.txt"); err == nil {
-			options = rtypes.EngineOpts{
-				NotUseGse:   false,
-				UseStore:    true,
-				StoreFolder: db.Configuration.IndexDir,
-				GseDict:     "dictionary.txt",
+		if !dbAlreadyExists {
+			mapping := bleve.NewIndexMapping()
+			index, err := bleve.New(idxPath, mapping)
+			if err != nil {
+				panic(err)
 			}
+			db.searchEngine = index
 		} else {
-			options = rtypes.EngineOpts{
-				NotUseGse:   false,
-				UseStore:    true,
-				StoreFolder: db.Configuration.IndexDir,
+			index, err := bleve.Open(idxPath)
+			if err != nil {
+				panic(err)
 			}
+			db.searchEngine = index
 		}
 
-		db.searchEngine.Init(options)
-
-		db.FlushSE()
-		go func() {
-			for {
-				time.Sleep(time.Second * 5)
-				db.FlushSE()
-			}
-		}()
 	}
 
 	// Load up the EvaluationEngine for the filters.
@@ -228,12 +218,9 @@ func (db *Gomenasai) Initialize() {
 	)
 }
 
-// FlushSE flushes the search engine index
+// FlushSE (DEPRECATED) flushes the search engine index
 func (db *Gomenasai) FlushSE() {
-	if !db.Configuration.NoIndex {
-		db.searchEngine.FlushIndex()
-		db.searchEngine.Flush()
-	}
+	// does nothing now, but is being kept for compatibility
 }
 
 // Search searches the index for a query string, retuns a search object
@@ -253,14 +240,19 @@ func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
 			Count:     len(toreturn),
 		}
 	}
-	result := db.searchEngine.Search(rtypes.SearchReq{Text: val})
-	for _, res := range result.Docs.(rtypes.ScoredDocs) {
-		code := res.ScoredID.DocId
-		data, err := db.Get(code)
+	//result := db.searchEngine.Search(rtypes.SearchReq{Text: val})
+	query := bleve.NewMatchQuery(val)
+	search := bleve.NewSearchRequest(query)
+	searchResults, err := db.searchEngine.Search(search)
+	if err != nil {
+		panic(err)
+	}
+	for _, hit := range searchResults.Hits {
+		data, err := db.Get(hit.ID)
 		if err == nil && data != nil {
 			toreturn = append(toreturn, data)
 		} else {
-			log.Printf("Failed to retrieve from index '%v': %v\n", code, err)
+			log.Printf("Failed to retrieve from index '%v': %v\n", hit.ID, err)
 		}
 	}
 	return &GomenasaiSearchResult{
@@ -270,8 +262,12 @@ func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
 	}
 }
 
+func (db *Gomenasai) deleteFromIndex(id string) {
+	db.searchEngine.Delete(id)
+}
+
 func (db *Gomenasai) insertOneIndex(id string, index string) {
-	db.searchEngine.Index(id, rtypes.DocData{Content: index})
+	db.searchEngine.Index(id, index)
 }
 
 // InsertIndex Creates a new index based on the filters specified
@@ -339,7 +335,7 @@ func (db *Gomenasai) Delete(id string) error {
 		return fmt.Errorf("Invalid document ID '%v'", id)
 	}
 	chunkID := idElems[0]
-	db.searchEngine.RemoveDoc(id, true)
+	db.deleteFromIndex(id)
 	activeChunk := db.chunks[chunkID]
 	return activeChunk.Delete(id)
 }
@@ -389,7 +385,6 @@ func (db *Gomenasai) Commit() {
 // Close closes all of the running services and commits everything to disk.
 func (db *Gomenasai) Close() {
 	db.Commit()
-	db.FlushSE()
 	db.searchEngine.Close()
 }
 
@@ -419,4 +414,23 @@ func doesFileExist(name string) bool {
 		}
 	}
 	return true
+}
+
+func inStrArray(array []string, str string) bool {
+	for _, elem := range array {
+		if elem == str {
+			return true
+		}
+	}
+	return false
+}
+
+// Checks if it's actually an error
+func isActuallyAnError(err error) bool {
+	if err != nil {
+		if err.Error() != "not an error" {
+			return true
+		}
+	}
+	return false
 }

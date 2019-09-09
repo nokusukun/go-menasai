@@ -91,6 +91,10 @@ func (sr *GomenasaiSearchResult) Sort(query string) *GomenasaiSearchResult {
 
 // Limit truncates the results based on where to start the truncation and the count.
 func (sr *GomenasaiSearchResult) Limit(start, count int) *GomenasaiSearchResult {
+	if start >= len(sr.Documents) {
+		log.Println("Failed to limit, passed start value exceeds the result count.")
+		return sr
+	}
 	end := start + count
 	if end > len(sr.Documents) {
 		end = len(sr.Documents)

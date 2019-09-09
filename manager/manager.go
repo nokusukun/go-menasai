@@ -241,9 +241,10 @@ func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
 		}
 	}
 	//result := db.searchEngine.Search(rtypes.SearchReq{Text: val})
-	query := bleve.NewMatchQuery(val)
+	query := bleve.NewMatchPhraseQuery(val)
 	search := bleve.NewSearchRequest(query)
 	searchResults, err := db.searchEngine.Search(search)
+
 	if err != nil {
 		panic(err)
 	}

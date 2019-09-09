@@ -220,7 +220,7 @@ func TestSearch(t *testing.T) {
 		t.Error(err)
 	}
 
-	searchResult := manager.Search("Qmadgec6CBnGMhEyUurjey5tqkKHv935na5e5oxa1U4QKa")
+	searchResult := manager.Search("")
 
 	if searchResult.Count == 0 {
 		t.Errorf("No document found, expected > 0\n")

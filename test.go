@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	logger "log"
 	"os"
-	"path/filepath"
 	"time"
 
 	gomenasai "gitlab.com/nokusukun/go-menasai/manager"
@@ -55,6 +54,28 @@ func printBenchmarkStats() {
 }
 
 func main() {
+	manager, err := gomenasai.Load("testDB")
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(manager.ChunkPaths)
+	result := manager.Search("watch")
+
+	for _, doc := range result.Documents {
+		fmt.Println(doc.ExportI()["title"])
+		//fmt.Println(doc.ExportI()["description"])
+	}
+	fmt.Println("Filtered")
+	result.Filter(`contains(doc.slug, "nike")`)
+
+	for _, doc := range result.Documents {
+		fmt.Println(doc.ExportI()["title"])
+		fmt.Println(doc.ExportI()["slug"])
+	}
+}
+
+func main2() {
 	// manager := chunk.ChunkManager{}
 	manager, err := gomenasai.New(&gomenasai.GomenasaiConfig{
 		Name:           "TestDB",
@@ -148,8 +169,7 @@ func main() {
 		docs := manager.Search("watch").
 			Filter(`contains(doc.slug, "rolex")`).
 			Filter(`contains(doc.slug, "daytona")`).
-			Sort(`x.price.amount < y.price.amount`).
-			Limit(10, 500)
+			Sort(`x.price.amount < y.price.amount`)
 
 		log.Println("Search, limit start-10;count-500 and sort result for 'watch': ", len(docs.Documents))
 
@@ -171,25 +191,25 @@ func main() {
 
 	manager.Close()
 
-	func(dir string) error {
-		d, err := os.Open(dir)
-		if err != nil {
-			return err
-		}
-		defer d.Close()
-		names, err := d.Readdirnames(-1)
-		if err != nil {
-			return err
-		}
-		for _, name := range names {
-			err = os.RemoveAll(filepath.Join(dir, name))
-			if err != nil {
-				return err
-			}
-		}
-		os.RemoveAll(dir)
-		return nil
-	}("testdb")
+	// func(dir string) error {
+	// 	d, err := os.Open(dir)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	defer d.Close()
+	// 	names, err := d.Readdirnames(-1)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	for _, name := range names {
+	// 		err = os.RemoveAll(filepath.Join(dir, name))
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 	}
+	// 	os.RemoveAll(dir)
+	// 	return nil
+	// }("testdb")
 
 	printBenchmarkStats()
 	fmt.Println(col(100, 230, 90, RGBFront), "Test Complete ✅", RGBReset)

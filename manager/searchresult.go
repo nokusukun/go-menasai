@@ -28,13 +28,13 @@ func (sr *GomenasaiSearchResult) ExportJSONArray() ([]byte, error) {
 }
 
 func (sr *GomenasaiSearchResult) Filter(query string) *GomenasaiSearchResult {
-	fmt.Println("Loading Filter", query)
+	log.Println("Loading Filter", query)
 	query = fmt.Sprintf("%v", query)
 	toreturn := []*chunk.Document{}
 	eval, err := sr.Manager.EvalEngine.NewEvaluable(query)
 
 	if err != nil {
-		fmt.Println("Failed to load filter: ", err)
+		log.Println("Failed to load filter: ", err)
 	}
 
 	for _, doc := range sr.Documents {
@@ -107,7 +107,7 @@ func (sr *GomenasaiSearchResult) Limit(start, count int) *GomenasaiSearchResult 
 func (sr *GomenasaiSearchResult) Transform(spec string) *GomenasaiSearchResult {
 	kz, err := kazaam.NewKazaam(spec)
 	if err != nil {
-		fmt.Println("Failed to load spec in transform: ", err, "\nspec: ", spec)
+		log.Println("Failed to load spec in transform: ", err, "\nspec: ", spec)
 		return sr
 	}
 	for idx, doc := range sr.Documents {
@@ -116,7 +116,7 @@ func (sr *GomenasaiSearchResult) Transform(spec string) *GomenasaiSearchResult {
 		// Transform the content of the document
 		cont, err := kz.TransformInPlace(newdoc.Content)
 		if err != nil {
-			fmt.Println("Failed to transform document", err)
+			log.Println("Failed to transform document", err)
 		}
 		// Overwrite the content with the transformed content
 		newdoc.Content = cont

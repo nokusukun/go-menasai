@@ -113,7 +113,7 @@ func (db *Gomenasai) WriteState() error {
 	if err != nil {
 		return fmt.Errorf("Failed to save configuration as JSON: %v", err)
 	}
-	err = ioutil.WriteFile(path.Join(db.Configuration.Path, "config.json"), gomenJSON, 1)
+	err = ioutil.WriteFile(path.Join(db.Configuration.Path, "config.json"), gomenJSON, 0777)
 	if err != nil {
 		return fmt.Errorf("Failed to write configuration: '%v'", err)
 	}
@@ -182,7 +182,6 @@ func (db *Gomenasai) Initialize() {
 		}
 	}
 
-	// Initialize extractors for the riot engine
 	for _, filterPath := range db.Configuration.IndexPaths {
 		filter, _ := jsonpath.Prepare(filterPath)
 		db.indexFilters = append(db.indexFilters, filter)
@@ -191,7 +190,7 @@ func (db *Gomenasai) Initialize() {
 	if !db.Configuration.NoIndex {
 		idxPath := path.Join(db.Configuration.Path, "index.db")
 		dbAlreadyExists := doesFileExist(idxPath)
-		fmt.Println(idxPath)
+		// fmt.Println(idxPath)
 
 		if !dbAlreadyExists {
 			mapping := bleve.NewIndexMapping()

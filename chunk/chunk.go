@@ -39,7 +39,7 @@ func CreateChunk(config *Config) (*Chunk, error) {
 	if err != nil {
 		return nil, err
 	}
-	ioutil.WriteFile(config.Path, chunkJSON, 1)
+	ioutil.WriteFile(config.Path, chunkJSON, 0777)
 	newChunk.Store = make(map[string]*Document)
 	newChunk.Initialize()
 	return newChunk, nil
@@ -47,7 +47,7 @@ func CreateChunk(config *Config) (*Chunk, error) {
 
 // LoadChunk lazily loads the chunk to the manager
 func LoadChunk(path string) (*Chunk, error) {
-	fmt.Println("PartialLoading Chunk", path)
+	// fmt.Println("PartialLoading Chunk", path)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		panic(fmt.Errorf("'%v' does not exist, failed to load chunk", path))
 		return nil, fmt.Errorf("'%v' does not exist, failed to load chunk", path)
@@ -61,7 +61,7 @@ func LoadChunk(path string) (*Chunk, error) {
 
 // LoadChunk loads an already existing chunk file.
 func (c *Chunk) internalLoadChunk() {
-	fmt.Println("FullLoading Chunk", c.Config.Path)
+	// fmt.Println("FullLoading Chunk", c.Config.Path)
 	path := c.Config.Path
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		panic(fmt.Errorf("'%v' does not exist, failed to load chunk", path))
@@ -71,7 +71,7 @@ func (c *Chunk) internalLoadChunk() {
 		panic(err)
 	}
 	json.Unmarshal(chunkBytes, c)
-	fmt.Println("FullLoading Chunk Length", len(c.Store))
+	// fmt.Println("FullLoading Chunk Length", len(c.Store))
 	c.Initialize()
 }
 
@@ -245,8 +245,8 @@ func (c *Chunk) Commit() error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("Writing chunk", c.Config.ID, "to", c.Config.Path)
-	ioutil.WriteFile(c.Config.Path, chunkJSON, 1)
+	// fmt.Println("Writing chunk", c.Config.ID, "to", c.Config.Path)
+	ioutil.WriteFile(c.Config.Path, chunkJSON, 0777)
 	return nil
 }
 

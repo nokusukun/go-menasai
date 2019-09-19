@@ -7,11 +7,11 @@ A compact performant nosql store with full text searching.
 
 ## Install
 ```bash
-~$ go get -u gitlab.com/nokusukun/go-menasai
+~$ go get -u github.com/nokusukun/go-menasai
 ```
 
 ## Usage
-Godoc: https://godoc.org/gitlab.com/nokusukun/go-menasai/manager
+Godoc: https://godoc.org/github.com/nokusukun/go-menasai/manager
 ```golang
     var db *gomenasai.Gomenasai
     // Check if the database exists

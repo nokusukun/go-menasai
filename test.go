@@ -10,7 +10,7 @@ import (
 	"os"
 	"time"
 
-	gomenasai "gitlab.com/nokusukun/go-menasai/manager"
+	gomenasai "github.com/nokusukun/go-menasai/manager"
 )
 
 var (

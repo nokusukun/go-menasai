@@ -8,7 +8,7 @@ import (
 
 	"github.com/qntfy/kazaam"
 
-	"gitlab.com/nokusukun/go-menasai/chunk"
+	"github.com/nokusukun/go-menasai/chunk"
 )
 
 type GomenasaiSearchResult struct {

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	gomenasai "gitlab.com/nokusukun/go-menasai/manager"
+	gomenasai "github.com/nokusukun/go-menasai/manager"
 )
 
 type SampleDocument struct {

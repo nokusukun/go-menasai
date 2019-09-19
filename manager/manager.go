@@ -17,7 +17,7 @@ import (
 
 	"github.com/yalp/jsonpath"
 
-	"gitlab.com/nokusukun/go-menasai/chunk"
+	"github.com/nokusukun/go-menasai/chunk"
 )
 
 var json = jsoniter.ConfigCompatibleWithStandardLibrary

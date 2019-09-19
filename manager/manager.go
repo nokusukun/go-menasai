@@ -224,23 +224,23 @@ func (db *Gomenasai) FlushSE() {
 
 // Search searches the index for a query string, retuns a search object
 func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
-	toreturn := []*chunk.Document{}
+	var toReturn []*chunk.Document
 	if val == "" || db.Configuration.NoIndex {
 		for _, c := range db.chunks {
 			for _, val := range c.Store {
 				if val != nil {
-					toreturn = append(toreturn, val)
+					toReturn = append(toReturn, val)
 				}
 			}
 		}
 		return &GomenasaiSearchResult{
-			Documents: toreturn,
+			Documents: toReturn,
 			Manager:   db,
-			Count:     len(toreturn),
+			Count:     len(toReturn),
 		}
 	}
 	//result := db.searchEngine.Search(rtypes.SearchReq{Text: val})
-	query := bleve.NewMatchPhraseQuery(val)
+	query := bleve.NewFuzzyQuery(val)
 	search := bleve.NewSearchRequest(query)
 	searchResults, err := db.searchEngine.Search(search)
 
@@ -250,15 +250,15 @@ func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
 	for _, hit := range searchResults.Hits {
 		data, err := db.Get(hit.ID)
 		if err == nil && data != nil {
-			toreturn = append(toreturn, data)
+			toReturn = append(toReturn, data)
 		} else {
 			log.Printf("Failed to retrieve from index '%v': %v\n", hit.ID, err)
 		}
 	}
 	return &GomenasaiSearchResult{
-		Documents: toreturn,
+		Documents: toReturn,
 		Manager:   db,
-		Count:     len(toreturn),
+		Count:     len(toReturn),
 	}
 }
 

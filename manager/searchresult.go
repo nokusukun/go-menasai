@@ -12,7 +12,7 @@ import (
 )
 
 type GomenasaiSearchResult struct {
-	Documents []*chunk.Document
+	Documents []chunk.Document
 	Manager   *Gomenasai
 	Count     int
 }
@@ -30,7 +30,7 @@ func (sr *GomenasaiSearchResult) ExportJSONArray() ([]byte, error) {
 func (sr *GomenasaiSearchResult) Filter(query string) *GomenasaiSearchResult {
 	log.Println("Loading Filter", query)
 	query = fmt.Sprintf("%v", query)
-	toreturn := []*chunk.Document{}
+	toreturn := []chunk.Document{}
 	eval, err := sr.Manager.EvalEngine.NewEvaluable(query)
 
 	if err != nil {
@@ -112,7 +112,7 @@ func (sr *GomenasaiSearchResult) Transform(spec string) *GomenasaiSearchResult {
 	}
 	for idx, doc := range sr.Documents {
 		// Dereference from pointer to value
-		newdoc := *doc
+		newdoc := doc
 		// Transform the content of the document
 		cont, err := kz.TransformInPlace(newdoc.Content)
 		if err != nil {
@@ -123,7 +123,7 @@ func (sr *GomenasaiSearchResult) Transform(spec string) *GomenasaiSearchResult {
 		// Flag the document to as a reexport
 		newdoc.Reexport()
 		// Overwrite the pointer of the old document to the new one
-		sr.Documents[idx] = &newdoc
+		sr.Documents[idx] = newdoc
 	}
 	return sr
 }

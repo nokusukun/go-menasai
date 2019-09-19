@@ -16,6 +16,7 @@ import (
 	"github.com/PaesslerAG/gval"
 
 	"github.com/yalp/jsonpath"
+
 	"gitlab.com/nokusukun/go-menasai/chunk"
 )
 
@@ -66,7 +67,7 @@ func Exists(dbpath string) bool {
 // already exists. Use `gomenasai.Load` instead.
 func New(config *GomenasaiConfig) (*Gomenasai, error) {
 	if doesFileExist(config.Path) {
-		return nil, fmt.Errorf("Target directory '%v' already exists, use 'Load' instead", config.Path)
+		return nil, fmt.Errorf("target directory '%v' already exists, use 'Load' instead", config.Path)
 	}
 	if config.ChunkSizeLimit == 0 {
 		log.Println("Chunksize is not specified or zero, setting to default of 4,096‬")
@@ -90,16 +91,16 @@ func New(config *GomenasaiConfig) (*Gomenasai, error) {
 // Use `gomenasai.New` instead.
 func Load(dbpath string) (*Gomenasai, error) {
 	if !doesFileExist(dbpath) {
-		return nil, fmt.Errorf("Target directory '%v' doesn't exist, use 'New' to create a new database", dbpath)
+		return nil, fmt.Errorf("target directory '%v' doesn't exist, use 'New' to create a new database", dbpath)
 	}
 	rawConfig, err := ioutil.ReadFile(path.Join(dbpath, "config.json"))
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read configuration: %v", err)
+		return nil, fmt.Errorf("failed to read configuration: %v", err)
 	}
 	db := &Gomenasai{}
 	err = json.Unmarshal(rawConfig, db)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to load configuration to DB: %v", err)
+		return nil, fmt.Errorf("failed to load configuration to DB: %v", err)
 	}
 	db.Initialize()
 	log.Printf("%v contains %v documents.\n", db.Configuration.Name, db.Size())
@@ -111,11 +112,11 @@ func (db *Gomenasai) WriteState() error {
 	gomenJSON, err := json.Marshal(db)
 	//log.Println("Saving", string(gomenJSON))
 	if err != nil {
-		return fmt.Errorf("Failed to save configuration as JSON: %v", err)
+		return fmt.Errorf("failed to save configuration as JSON: %v", err)
 	}
 	err = ioutil.WriteFile(path.Join(db.Configuration.Path, "config.json"), gomenJSON, 0777)
 	if err != nil {
-		return fmt.Errorf("Failed to write configuration: '%v'", err)
+		return fmt.Errorf("failed to write configuration: '%v'", err)
 	}
 	return nil
 }
@@ -131,14 +132,14 @@ func (db *Gomenasai) NewChunk() error {
 	}
 	chunkPath := path.Join(db.Configuration.Path, "chunks", config.ID)
 	config.Path = chunkPath
-	chunk, err := chunk.CreateChunk(config)
+	c, err := chunk.CreateChunk(config)
 	if err != nil {
 		return err
 	}
-	db.chunks[config.ID] = chunk
+	db.chunks[config.ID] = c
 	db.ChunkPaths = append(db.ChunkPaths, config.Path)
 	db.ActiveChunk = config.ID
-	chunk.Initialize()
+	c.Initialize()
 	db.WriteState()
 	return nil
 }
@@ -146,13 +147,13 @@ func (db *Gomenasai) NewChunk() error {
 // LoadChunk loads an existing chunk. Called by
 // gomenasai.Initialize.
 func (db *Gomenasai) LoadChunk(xpath string) error {
-	chunk, err := chunk.LoadChunk(xpath)
+	c, err := chunk.LoadChunk(xpath)
 	if err != nil {
 		panic(err)
 	}
 	// chunk.Initialize()
 	_, chunkID := path.Split(xpath)
-	db.chunks[chunkID] = chunk
+	db.chunks[chunkID] = c
 	return nil
 }
 
@@ -224,12 +225,12 @@ func (db *Gomenasai) FlushSE() {
 
 // Search searches the index for a query string, retuns a search object
 func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
-	var toReturn []*chunk.Document
+	var toReturn []chunk.Document
 	if val == "" || db.Configuration.NoIndex {
 		for _, c := range db.chunks {
 			for _, val := range c.Store {
 				if val != nil {
-					toReturn = append(toReturn, val)
+					toReturn = append(toReturn, *val)
 				}
 			}
 		}
@@ -250,7 +251,7 @@ func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
 	for _, hit := range searchResults.Hits {
 		data, err := db.Get(hit.ID)
 		if err == nil && data != nil {
-			toReturn = append(toReturn, data)
+			toReturn = append(toReturn, *data)
 		} else {
 			log.Printf("Failed to retrieve from index '%v': %v\n", hit.ID, err)
 		}
@@ -314,7 +315,7 @@ func (db *Gomenasai) Insert(value interface{}) (res string, err error) {
 func (db *Gomenasai) Get(id string) (*chunk.Document, error) {
 	idElems := strings.Split(id, "$")
 	if len(idElems) != 2 {
-		return nil, fmt.Errorf("Invalid document ID '%v'", id)
+		return nil, fmt.Errorf("invalid document ID '%v'", id)
 	}
 	chunkID := idElems[0]
 	activeChunk := db.chunks[chunkID]
@@ -332,7 +333,7 @@ func (db *Gomenasai) Delete(id string) error {
 
 	idElems := strings.Split(id, "$")
 	if len(idElems) != 2 {
-		return fmt.Errorf("Invalid document ID '%v'", id)
+		return fmt.Errorf("invalid document ID '%v'", id)
 	}
 	chunkID := idElems[0]
 	db.deleteFromIndex(id)
@@ -347,7 +348,7 @@ func (db *Gomenasai) Update(docId string, content interface{}) error {
 
 	idElems := strings.Split(docId, "$")
 	if len(idElems) != 2 {
-		return fmt.Errorf("Invalid document ID '%v'", docId)
+		return fmt.Errorf("invalid document ID '%v'", docId)
 	}
 	chunkID := idElems[0]
 	activeChunk := db.chunks[chunkID]
@@ -363,9 +364,9 @@ func (db *Gomenasai) Update(docId string, content interface{}) error {
 func (db *Gomenasai) Commit() {
 	chunkCount := len(db.chunks)
 	toreturns := make(chan error, chunkCount)
-	for id, chunk := range db.chunks {
+	for id, c := range db.chunks {
 		log.Println("Sending Commit message to:", id)
-		result := chunk.CommitAsync()
+		result := c.CommitAsync()
 		go func() {
 			err := <-result
 			toreturns <- err

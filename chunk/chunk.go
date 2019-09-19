@@ -50,7 +50,7 @@ func LoadChunk(path string) (*Chunk, error) {
 	// fmt.Println("PartialLoading Chunk", path)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		panic(fmt.Errorf("'%v' does not exist, failed to load chunk", path))
-		return nil, fmt.Errorf("'%v' does not exist, failed to load chunk", path)
+		// return nil, fmt.Errorf("'%v' does not exist, failed to load chunk", path)
 	}
 	newChunk := Chunk{}
 	newChunk.Config = &Config{}
@@ -203,7 +203,7 @@ func (c *Chunk) GetAsync(id string) chan *ReturnAsync {
 		res := c.Get(id)
 		toreturn := &ReturnAsync{}
 		if res == nil {
-			toreturn.Error = fmt.Errorf("No document found")
+			toreturn.Error = fmt.Errorf("no document found")
 		} else {
 			toreturn.Content = res
 			toreturn.Error = nil
@@ -233,7 +233,7 @@ func (c *Chunk) Delete(id string) error {
 	c.checkInit()
 	delete(c.Store, id)
 	if c.Store[id] != nil {
-		return fmt.Errorf("Failed to delete document: %v", c.Store[id])
+		return fmt.Errorf("failed to delete document: %v", c.Store[id])
 	}
 	return nil
 }

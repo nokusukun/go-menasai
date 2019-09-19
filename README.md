@@ -2,7 +2,7 @@
 
 A compact performant nosql store with full text searching.
 * Compact Binary
-* Full featured text searching
+* Full featured text searching using belve
 * Extensible filtering and sorting (handled by gval)
 
 ## Install
@@ -13,7 +13,11 @@ A compact performant nosql store with full text searching.
 ## Usage
 Godoc: https://godoc.org/github.com/nokusukun/go-menasai/manager
 ```golang
-    var db *gomenasai.Gomenasai
+    import (
+        "github.com/nokusukun/go-menasai/manager"
+    ) 
+    ...
+    var db *manager.Gomenasai
     // Check if the database exists
     if gomenasai.Exists("~/.testDB") {
         // Load the database

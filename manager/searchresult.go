@@ -21,7 +21,7 @@ func (sr *GomenasaiSearchResult) ExportJSONArray() ([]byte, error) {
 	arr := []interface{}{}
 	for _, doc := range sr.Documents {
 		i := new(interface{})
-		json.Unmarshal(doc.Content, &i)
+		_ = json.Unmarshal(doc.Content, &i)
 		arr = append(arr, i)
 	}
 	return json.Marshal(arr)
@@ -30,7 +30,7 @@ func (sr *GomenasaiSearchResult) ExportJSONArray() ([]byte, error) {
 func (sr *GomenasaiSearchResult) Filter(query string) *GomenasaiSearchResult {
 	log.Println("Loading Filter", query)
 	query = fmt.Sprintf("%v", query)
-	toreturn := []chunk.Document{}
+	var toReturn []chunk.Document
 	eval, err := sr.Manager.EvalEngine.NewEvaluable(query)
 
 	if err != nil {
@@ -39,7 +39,7 @@ func (sr *GomenasaiSearchResult) Filter(query string) *GomenasaiSearchResult {
 
 	for _, doc := range sr.Documents {
 		mapdoc := make(map[string]interface{})
-		json.Unmarshal(doc.Content, &mapdoc)
+		_ = json.Unmarshal(doc.Content, &mapdoc)
 
 		value, err := eval(context.Background(), map[string]interface{}{
 			"doc": mapdoc,
@@ -52,12 +52,12 @@ func (sr *GomenasaiSearchResult) Filter(query string) *GomenasaiSearchResult {
 		val, ok := value.(bool)
 		if ok {
 			if val {
-				toreturn = append(toreturn, doc)
+				toReturn = append(toReturn, doc)
 			}
 		}
 	}
-	sr.Documents = toreturn
-	sr.Count = len(toreturn)
+	sr.Documents = toReturn
+	sr.Count = len(toReturn)
 	return sr
 }
 
@@ -70,18 +70,26 @@ func (sr *GomenasaiSearchResult) Sort(query string) *GomenasaiSearchResult {
 	if err != nil {
 		log.Println("Failed to load filter: ", err)
 	}
+
+	if len(sr.Documents) == 0 {
+		return sr
+	}
+
 	sort.Slice(sr.Documents, func(x, y int) bool {
+		if y >= len(sr.Documents) {
+			return false
+		}
 		value, err := eval(context.Background(), map[string]interface{}{
 			"x": sr.Documents[x].ExportI(),
 			"y": sr.Documents[y].ExportI(),
 		})
 		if err != nil {
-			log.Println("Failed to evaluate:", err)
+			log.Println("failed to evaluate:", err)
 			return false
 		}
 		val, ok := value.(bool)
 		if !ok {
-			log.Println("Failed to evaluate: Value is not bool:", value)
+			log.Println("failed to evaluate: Value is not bool:", value)
 			return false
 		}
 		return val
@@ -92,7 +100,7 @@ func (sr *GomenasaiSearchResult) Sort(query string) *GomenasaiSearchResult {
 // Limit truncates the results based on where to start the truncation and the count.
 func (sr *GomenasaiSearchResult) Limit(start, count int) *GomenasaiSearchResult {
 	if start >= len(sr.Documents) {
-		log.Println("Failed to limit, passed start value exceeds the result count.")
+		log.Println("failed to limit, passed start value exceeds the result count")
 		return sr
 	}
 	end := start + count
@@ -107,7 +115,7 @@ func (sr *GomenasaiSearchResult) Limit(start, count int) *GomenasaiSearchResult 
 func (sr *GomenasaiSearchResult) Transform(spec string) *GomenasaiSearchResult {
 	kz, err := kazaam.NewKazaam(spec)
 	if err != nil {
-		log.Println("Failed to load spec in transform: ", err, "\nspec: ", spec)
+		log.Println("failed to load spec in transform: ", err, "\nspec: ", spec)
 		return sr
 	}
 	for idx, doc := range sr.Documents {
@@ -116,7 +124,7 @@ func (sr *GomenasaiSearchResult) Transform(spec string) *GomenasaiSearchResult {
 		// Transform the content of the document
 		cont, err := kz.TransformInPlace(newdoc.Content)
 		if err != nil {
-			log.Println("Failed to transform document", err)
+			log.Println("failed to transform document", err)
 		}
 		// Overwrite the content with the transformed content
 		newdoc.Content = cont

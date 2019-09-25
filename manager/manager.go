@@ -241,7 +241,10 @@ func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
 		}
 	}
 	//result := db.searchEngine.Search(rtypes.SearchReq{Text: val})
-	query := bleve.NewFuzzyQuery(val)
+
+	// query := bleve.NewFuzzyQuery(val)
+	query := bleve.NewMatchQuery(val)
+	query.SetFuzziness(2)
 	search := bleve.NewSearchRequest(query)
 	searchResults, err := db.searchEngine.Search(search)
 

@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	logger "log"
 	"os"
+	"path/filepath"
 	"time"
 
 	gomenasai "github.com/nokusukun/go-menasai/manager"
@@ -39,6 +40,7 @@ func col(r, g, b int, t string) string {
 }
 
 func benchmark(prefix string, target func()) {
+	fmt.Printf("\033[31;1;1m[Benchmark] Running '%v'\033[0m\n", prefix)
 	start := time.Now()
 	target()
 	end := time.Now()
@@ -53,7 +55,7 @@ func printBenchmarkStats() {
 	}
 }
 
-func main() {
+func main2() {
 	manager, err := gomenasai.Load("testDB")
 	if err != nil {
 		panic(err)
@@ -75,7 +77,7 @@ func main() {
 	}
 }
 
-func main2() {
+func main() {
 	// manager := chunk.ChunkManager{}
 	manager, err := gomenasai.New(&gomenasai.GomenasaiConfig{
 		Name:           "TestDB",
@@ -89,6 +91,7 @@ func main2() {
 	}
 
 	jresp := []DjaliListing{}
+	fmt.Println("Reading Test Data")
 	rawData, _ := ioutil.ReadFile("testdatadjali.json")
 	err = json.Unmarshal(rawData, &jresp)
 	if err != nil {
@@ -110,8 +113,6 @@ func main2() {
 		}
 	})
 
-	manager.FlushSE()
-
 	benchmark("Retrieval", func() {
 		for _, id := range ids {
 			doc, err := manager.Get(id)
@@ -124,37 +125,31 @@ func main2() {
 		}
 	})
 
+	time.Sleep(time.Second * 5)
+
+	benchmark("Reloading Database", func() {
+		manager.Close()
+		manager, err = gomenasai.Load("testDB")
+	})
+
+	time.Sleep(time.Second * 5)
+
 	benchmark("Searching", func() {
-		docs := manager.Search("watch").
-			Filter(`contains(doc.slug, "rolex")`).
-			Filter(`contains(doc.slug, "daytona")`).
-			Sort(`x.price.amount < y.price.amount`).
-			Transform(`[{
-				"operation": "shift",
-				"spec": {
-				  "title": "title",
-				  "owner": "parentPeer",
-				  "price": "price.amount"
-				}
-			  }]`)
+		docs := manager.Search("plant")
+		// Filter(`contains(doc.description, "europe")`)
+		//Filter(`contains(doc.slug, "daytona")`).
+		//Sort(`x.price.amount < y.price.amount`).
+		//Transform(`[{
+		//	"operation": "shift",
+		//	"spec": {
+		//	  "title": "title",
+		//	  "owner": "parentPeer",
+		//	  "price": "price.amount"
+		//	}
+		//  }]`)
 
 		log.Println("Search and sort result for 'rolex watch': ", len(docs.Documents))
 
-		for _, doc := range docs.Documents {
-			//djali := DjaliListing{}
-			log.Println(doc.ExportI())
-			//doc.Export(&djali)
-			//log.Println(djali.Price, djali.Title)
-		}
-		// benchmark("Filtering", func() {
-		// 	docs.Filter(`contains(doc.slug, "fruit")`).Filter(`contains(doc.slug, "skateboard")`)
-		// 	fmt.Println("Filter result for 'fruit' & 'skateboard': ", len(docs.Documents))
-		// })
-		//
-		// benchmark("Exporting to JSON", func() {
-		// 	jsonData, _ := docs.ExportJSONArray()
-		// 	fmt.Println(string(jsonData)[:100], "...")
-		// })
 	})
 	manager.Close()
 
@@ -166,10 +161,11 @@ func main2() {
 	})
 
 	benchmark("Searching", func() {
-		docs := manager.Search("watch").
-			Filter(`contains(doc.slug, "rolex")`).
-			Filter(`contains(doc.slug, "daytona")`).
-			Sort(`x.price.amount < y.price.amount`)
+		docs := manager.Search("watch").Filter(`contains(doc.slug, "quartz")`)
+		//.
+		//Filter(`contains(doc.slug, "rolex")`).
+		//	Filter(`contains(doc.slug, "daytona")`).
+		//	Sort(`x.price.amount < y.price.amount`)
 
 		log.Println("Search, limit start-10;count-500 and sort result for 'watch': ", len(docs.Documents))
 
@@ -191,25 +187,25 @@ func main2() {
 
 	manager.Close()
 
-	// func(dir string) error {
-	// 	d, err := os.Open(dir)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	defer d.Close()
-	// 	names, err := d.Readdirnames(-1)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	for _, name := range names {
-	// 		err = os.RemoveAll(filepath.Join(dir, name))
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	// 	}
-	// 	os.RemoveAll(dir)
-	// 	return nil
-	// }("testdb")
+	func(dir string) error {
+		d, err := os.Open(dir)
+		if err != nil {
+			return err
+		}
+		defer d.Close()
+		names, err := d.Readdirnames(-1)
+		if err != nil {
+			return err
+		}
+		for _, name := range names {
+			err = os.RemoveAll(filepath.Join(dir, name))
+			if err != nil {
+				return err
+			}
+		}
+		os.RemoveAll(dir)
+		return nil
+	}("TestDB")
 
 	printBenchmarkStats()
 	fmt.Println(col(100, 230, 90, RGBFront), "Test Complete ✅", RGBReset)

@@ -6,6 +6,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
 )
@@ -19,6 +21,14 @@ type Chunk struct {
 	aRunning       bool
 	aJobs          chan func()
 	initialized    bool
+	Access         AccessMeta
+}
+
+type AccessMeta struct {
+	LastAccess     int64
+	IsLoaded       bool
+	Mut            sync.RWMutex
+	CleanerRunning bool
 }
 
 type Config struct {
@@ -26,6 +36,23 @@ type Config struct {
 	ID         string   `json:"chunkId"`
 	Path       string   `json:"path"`
 	IndexDir   string   `json:"indexDir"`
+}
+
+func Init__AccessMeta() AccessMeta {
+	a := AccessMeta{
+		LastAccess: time.Now().Unix(),
+		IsLoaded:   false,
+		Mut:        sync.RWMutex{},
+	}
+	return a
+}
+
+func (am *AccessMeta) Ping() {
+	am.LastAccess = time.Now().Unix()
+}
+
+func (am *AccessMeta) IsExpired(span int64) bool {
+	return (time.Now().Unix() - am.LastAccess) > span
 }
 
 // CreateChunk - Creates a chunk based on a specified id and path,
@@ -41,6 +68,7 @@ func CreateChunk(config *Config) (*Chunk, error) {
 	}
 	ioutil.WriteFile(config.Path, chunkJSON, 0777)
 	newChunk.Store = make(map[string]*Document)
+	newChunk.Access = Init__AccessMeta()
 	newChunk.Initialize()
 	return newChunk, nil
 }
@@ -56,12 +84,14 @@ func LoadChunk(path string) (*Chunk, error) {
 	newChunk.Config = &Config{}
 	newChunk.Config.Path = path
 	newChunk.initialized = false
+	newChunk.Access = Init__AccessMeta()
 	return &newChunk, nil
 }
 
 // LoadChunk loads an already existing chunk file.
 func (c *Chunk) internalLoadChunk() {
 	// fmt.Println("FullLoading Chunk", c.Config.Path)
+	fmt.Println("reloading chunk", c.Config.Path)
 	path := c.Config.Path
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		panic(fmt.Errorf("'%v' does not exist, failed to load chunk", path))
@@ -78,25 +108,7 @@ func (c *Chunk) internalLoadChunk() {
 func (c *Chunk) checkInit() {
 	if !c.initialized {
 		c.internalLoadChunk()
-
 		c.initialized = true
-		/**
-		 * If the line above is omitted.
-		 *  Benchmark Stats
-		 * 🕒[Benchmark]Load database       : 21.5311645s
-		 * 🕒[Benchmark]Search Adele        : 5.103234s
-		 * 🕒[Benchmark]Search Jergens      : 157.7796ms
-		 * 🕒[Benchmark]Search Adele Pt2    : 4.7570868s
-		 * 🕒[Benchmark]Search Jergens Pt2  : 355.4547ms
-		 * -----------
-		 * If not omitted
-		 *  Benchmark Stats
-		 * 🕒[Benchmark]Load database       : 22.4295377s
-		 * 🕒[Benchmark]Search Adele        : 19.5727ms
-		 * 🕒[Benchmark]Search Jergens      : 997.2µs
-		 * 🕒[Benchmark]Search Adele Pt2    : 21.9557ms
-		 * 🕒[Benchmark]Search Jergens Pt2  : 1.0058ms
-		 */
 	}
 }
 
@@ -104,8 +116,34 @@ func (c *Chunk) checkInit() {
 //	Should be managed by the chunk manager.
 // 	TODO - Chunk manager should be the one managing the search engine.
 func (c *Chunk) Initialize() {
-
 	c.runAsyncScheduler()
+
+	if c.Access.CleanerRunning {
+		return
+	}
+
+	c.Access.CleanerRunning = true
+	go func() {
+		fmt.Println("checkexpiry service", c.Config.Path)
+		for c.Access.CleanerRunning {
+			// Run the cleanup check after 30 seconds
+			time.Sleep(time.Second * 10)
+			fmt.Println("check expiry", c.Config.Path)
+			if c.Access.IsExpired(5) {
+				c.unload()
+				c.Access.CleanerRunning = false
+			}
+		}
+
+	}()
+}
+
+func (c *Chunk) unload() {
+	fmt.Println("unloading chunk", c.Config.Path)
+	<-c.CommitAsync()
+	c.Store = nil
+	c.Access.IsLoaded = false
+	c.initialized = false
 }
 
 // StoreCount returns how many items are in the store
@@ -156,7 +194,7 @@ func (c *Chunk) Insert(value interface{}) (string, []byte, error) {
 		c.Store = make(map[string]*Document)
 	}
 	c.Store[ID] = &doc
-
+	c.Access.Ping()
 	return ID, asJSON, nil
 }
 
@@ -191,7 +229,7 @@ func (c *Chunk) Get(id string) *Document {
 	//}
 	//return nil
 	doc := c.Store[id]
-
+	c.Access.Ping()
 	return doc
 }
 
@@ -224,7 +262,7 @@ func (c *Chunk) Update(ID string, content interface{}) ([]byte, error) {
 	doc := Document{ID: ID, Content: asJSON}
 	//c.Store = append(c.Store, &doc)
 	c.Store[ID] = &doc
-
+	c.Access.Ping()
 	return asJSON, nil
 }
 
@@ -235,6 +273,7 @@ func (c *Chunk) Delete(id string) error {
 	if c.Store[id] != nil {
 		return fmt.Errorf("failed to delete document: %v", c.Store[id])
 	}
+	c.Access.Ping()
 	return nil
 }
 

@@ -18,8 +18,6 @@ import (
 	"github.com/PaesslerAG/gval"
 
 	"github.com/yalp/jsonpath"
-
-	"github.com/nokusukun/go-menasai/chunk"
 )
 
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -252,7 +250,7 @@ func (db *Gomenasai) FlushSE() {
 
 // Search searches the index for a query string, returns a search object
 func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
-	var toReturn []chunk.Document
+	var toReturn []Document
 
 	if val == "" || db.Configuration.NoIndex {
 		//for _, c := range db.chunks {
@@ -362,7 +360,7 @@ func (db *Gomenasai) Insert(value interface{}) (res string, err error) {
 		b := tx.Bucket([]byte("default"))
 		nextseq, _ := b.NextSequence()
 		ID = strconv.FormatUint(nextseq, 32)
-		doc := chunk.Document{ID: ID, Content: asJSON}
+		doc := Document{ID: ID, Content: asJSON}
 
 		j, _ := doc.MarshalJSON()
 		err := b.Put([]byte(ID), j)
@@ -392,7 +390,7 @@ func (db *Gomenasai) Insert(value interface{}) (res string, err error) {
 }
 
 // Get retuns a Document specified by the DocumentID
-func (db *Gomenasai) Get(id string) (*chunk.Document, error) {
+func (db *Gomenasai) Get(id string) (*Document, error) {
 	//idElems := strings.Split(id, "$")
 	//if len(idElems) != 2 {
 	//	return nil, fmt.Errorf("invalid document ID '%v'", id)
@@ -405,7 +403,7 @@ func (db *Gomenasai) Get(id string) (*chunk.Document, error) {
 	//}
 	//return res.Content.(*chunk.Document), res.Error
 
-	toRet := chunk.Document{}
+	toRet := Document{}
 	_ = db.bolt.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("default"))
 		toRet = Byte2Document(b.Get([]byte(id)))
@@ -458,7 +456,7 @@ func (db *Gomenasai) Update(docId string, content interface{}) error {
 
 		asJSON, _ := json.Marshal(content)
 
-		doc := chunk.Document{ID: docId, Content: asJSON}
+		doc := Document{ID: docId, Content: asJSON}
 
 		j, _ := doc.MarshalJSON()
 		err := b.Put([]byte(docId), j)

@@ -7,12 +7,10 @@ import (
 	"sort"
 
 	"github.com/qntfy/kazaam"
-
-	"github.com/nokusukun/go-menasai/chunk"
 )
 
 type GomenasaiSearchResult struct {
-	Documents []chunk.Document
+	Documents []Document
 	Manager   *Gomenasai
 	Count     int
 }
@@ -30,7 +28,7 @@ func (sr *GomenasaiSearchResult) ExportJSONArray() ([]byte, error) {
 func (sr *GomenasaiSearchResult) Filter(query string) *GomenasaiSearchResult {
 	log.Println("Loading Filter", query)
 	query = fmt.Sprintf("%v", query)
-	var toReturn []chunk.Document
+	var toReturn []Document
 	eval, err := sr.Manager.EvalEngine.NewEvaluable(query)
 
 	if err != nil {

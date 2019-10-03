@@ -1,4 +1,4 @@
-package chunk
+package gomenasai
 
 type Document struct {
 	ID      string `json:"id"`

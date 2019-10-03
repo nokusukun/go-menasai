@@ -1,11 +1,7 @@
 package gomenasai
 
-import (
-	"github.com/nokusukun/go-menasai/chunk"
-)
-
-func Byte2Document(barr []byte) chunk.Document {
-	var d chunk.Document
+func Byte2Document(barr []byte) Document {
+	var d Document
 	_ = json.Unmarshal(barr, &d)
 	return d
 }

@@ -18,28 +18,23 @@ import (
 	"github.com/PaesslerAG/gval"
 
 	"github.com/yalp/jsonpath"
-
-	"github.com/nokusukun/go-menasai/chunk"
 )
 
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 // GomenasaiConfig is passed to gomenasai.New
 type GomenasaiConfig struct {
-	Name           string   `json:"name"`
-	IndexDir       string   `json:"indexDir"`
-	Path           string   `json:"dbpath"`
-	ChunkSizeLimit int      `json:"chunkLimit"` // todo - ffd:chunk
-	IndexPaths     []string `json:"indexPaths"`
-	NoIndex        bool     `json:"noIndex"`
-	BoltPath       string   `json:"bolt_path"`
+	Name       string   `json:"name"`
+	IndexDir   string   `json:"indexDir"`
+	Path       string   `json:"dbpath"`
+	IndexPaths []string `json:"indexPaths"`
+	NoIndex    bool     `json:"noIndex"`
+	BoltPath   string   `json:"bolt_path"`
 }
 
 // Gomenasai is a service that manages individual chunks
 type Gomenasai struct {
-	ChunkPaths    []string         `json:"chunkPaths"` // todo - ffd:chunk
 	Configuration *GomenasaiConfig `json:"configuration"`
-	ActiveChunk   string           `json:"activeChunk"` // todo - ffd:chunk
 
 	bolt *bolt.DB
 
@@ -74,11 +69,7 @@ func New(config *GomenasaiConfig) (*Gomenasai, error) {
 	if doesFileExist(config.Path) {
 		return nil, fmt.Errorf("target directory '%v' already exists, use 'Load' instead", config.Path)
 	}
-	// todo - ffd:chunk
-	if config.ChunkSizeLimit == 0 {
-		log.Println("Chunksize is not specified or zero, setting to default of 4,096‬")
-		config.ChunkSizeLimit = 4096
-	}
+
 	if config.IndexDir == "" {
 		log.Println("No index directory specified, using defaults")
 		config.IndexDir = path.Join(config.Path, "index")
@@ -90,9 +81,11 @@ func New(config *GomenasaiConfig) (*Gomenasai, error) {
 	ensureDir(path.Join(config.Path, "chunks", ".empty"))
 	db := &Gomenasai{
 		Configuration: config,
-		ChunkPaths:    []string{},
 	}
-	db.WriteState()
+	err := db.WriteState()
+	if err != nil {
+		panic(fmt.Errorf("failed to write state: %v", err))
+	}
 	db.Initialize()
 	return db, nil
 }
@@ -131,42 +124,6 @@ func (db *Gomenasai) WriteState() error {
 	return nil
 }
 
-// NewChunk generates an new chunk and sets it as the active chunk.
-//	Called by the store, this should be private.
-//func (db *Gomenasai) NewChunk() error {
-//	db.lock.Lock()
-//	defer db.lock.Unlock()
-//	config := &chunk.Config{
-//		IndexPaths: db.Configuration.IndexPaths,
-//		ID:         fmt.Sprintf("%v-%v", db.Configuration.Name, len(db.chunks)),
-//	}
-//	chunkPath := path.Join(db.Configuration.Path, "chunks", config.ID)
-//	config.Path = chunkPath
-//	c, err := chunk.CreateChunk(config)
-//	if err != nil {
-//		return err
-//	}
-//	db.chunks[config.ID] = c
-//	db.ChunkPaths = append(db.ChunkPaths, config.Path)
-//	db.ActiveChunk = config.ID
-//	// c.Initialize()
-//	db.WriteState()
-//	return nil
-//}
-
-// LoadChunk loads an existing chunk. Called by
-// gomenasai.Initialize.
-//func (db *Gomenasai) LoadChunk(xpath string) error {
-//	c, err := chunk.LoadChunk(xpath)
-//	if err != nil {
-//		panic(err)
-//	}
-//	// chunk.Initialize()
-//	_, chunkID := path.Split(xpath)
-//	db.chunks[chunkID] = c
-//	return nil
-//}
-
 // OverrideEvalEngine lets you override and add functions accessible
 //	to the Filter.
 func (db *Gomenasai) OverrideEvalEngine(engine gval.Language) {
@@ -177,24 +134,7 @@ func (db *Gomenasai) OverrideEvalEngine(engine gval.Language) {
 // outside since it's only handled by `New()` and `Load()`.
 func (db *Gomenasai) Initialize() {
 	db.lock = &sync.RWMutex{}
-	// TODO - Remove all references to chunks
-	//db.chunks = make(map[string]*chunk.Chunk)
 	db.indexFilters = []jsonpath.FilterFunc{}
-
-	// TODO - Remove all references to chunks
-	//if len(db.ChunkPaths) == 0 {
-	//	err := db.NewChunk()
-	//	if err != nil {
-	//		panic(err)
-	//	}
-	//} else {
-	//	for _, chunkPath := range db.ChunkPaths {
-	//		err := db.LoadChunk(chunkPath)
-	//		if err != nil {
-	//			panic(err)
-	//		}
-	//	}
-	//}
 
 	bdb, err := bolt.Open(db.Configuration.BoltPath, 0600, nil)
 	if err != nil {
@@ -202,13 +142,17 @@ func (db *Gomenasai) Initialize() {
 	}
 	db.bolt = bdb
 
-	db.bolt.Update(func(tx *bolt.Tx) error {
+	err = db.bolt.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte("default"))
 		if err != nil {
 			return fmt.Errorf("create bucket: %s", err)
 		}
 		return nil
 	})
+
+	if err != nil {
+		panic(fmt.Errorf("failed to initialize default bucket: %v", err))
+	}
 
 	for _, filterPath := range db.Configuration.IndexPaths {
 		filter, _ := jsonpath.Prepare(filterPath)
@@ -218,7 +162,6 @@ func (db *Gomenasai) Initialize() {
 	if !db.Configuration.NoIndex {
 		idxPath := path.Join(db.Configuration.Path, "index.db")
 		dbAlreadyExists := doesFileExist(idxPath)
-		// fmt.Println(idxPath)
 
 		if !dbAlreadyExists {
 			mapping := bleve.NewIndexMapping()
@@ -252,17 +195,10 @@ func (db *Gomenasai) FlushSE() {
 
 // Search searches the index for a query string, returns a search object
 func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
-	var toReturn []chunk.Document
+	var toReturn []Document
 
 	if val == "" || db.Configuration.NoIndex {
-		//for _, c := range db.chunks {
-		//	for _, val := range c.Store {
-		//		if val != nil {
-		//			toReturn = append(toReturn, *val)
-		//		}
-		//	}
-		//}
-		db.bolt.View(func(tx *bolt.Tx) error {
+		_ = db.bolt.View(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte("default"))
 			c := b.Cursor()
 
@@ -278,9 +214,7 @@ func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
 			Count:     len(toReturn),
 		}
 	}
-	//result := db.searchEngine.Search(rtypes.SearchReq{Text: val})
 
-	//query := bleve.NewFuzzyQuery(val)
 	query := bleve.NewMatchQuery(val)
 	query.SetFuzziness(2)
 	search := bleve.NewSearchRequest(query)
@@ -289,16 +223,8 @@ func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
 	if err != nil {
 		panic(err)
 	}
-	//for _, hit := range searchResults.Hits {
-	//	data, err := db.Get(hit.ID)
-	//	if err == nil && data != nil {
-	//		toReturn = append(toReturn, *data)
-	//	} else {
-	//		log.Printf("Failed to retrieve from index '%v': %v\n", hit.ID, err)
-	//	}
-	//}
 
-	db.bolt.View(func(tx *bolt.Tx) error {
+	err = db.bolt.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("default"))
 
 		for _, hit := range searchResults.Hits {
@@ -311,6 +237,10 @@ func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
 		return nil
 	})
 
+	if err != nil {
+		fmt.Println("search partially failed: ", err)
+	}
+
 	return &GomenasaiSearchResult{
 		Documents: toReturn,
 		Manager:   db,
@@ -319,18 +249,30 @@ func (db *Gomenasai) Search(val string) *GomenasaiSearchResult {
 }
 
 func (db *Gomenasai) deleteFromIndex(id string) {
-	db.searchEngine.Delete(id)
+	err := db.searchEngine.Delete(id)
+	if err != nil {
+		fmt.Println("failed to delete from index: ", id, err)
+	}
 }
 
 func (db *Gomenasai) insertOneIndex(id string, index string) {
-	db.searchEngine.Index(id, index)
+	err := db.searchEngine.Index(id, index)
+	if err != nil {
+		fmt.Println("failed to insert to index: ", id, err)
+	}
 }
 
 // InsertIndex Creates a new index based on the filters specified
 //  on the IndexPaths
 func (db *Gomenasai) InsertIndex(ID string, asJSON []byte) {
 	var eInterf interface{}
-	json.Unmarshal(asJSON, &eInterf)
+	err := json.Unmarshal(asJSON, &eInterf)
+
+	if err != nil {
+		fmt.Println("InsertIndex: failed to unmarshal json: ", err)
+		fmt.Println("Additional data follows... ID: ", ID, " asJSON: ", string(asJSON))
+	}
+
 	indices := []string{}
 	// Loop through the chunk's index filters and append it to
 	//		the text search engine
@@ -362,7 +304,7 @@ func (db *Gomenasai) Insert(value interface{}) (res string, err error) {
 		b := tx.Bucket([]byte("default"))
 		nextseq, _ := b.NextSequence()
 		ID = strconv.FormatUint(nextseq, 32)
-		doc := chunk.Document{ID: ID, Content: asJSON}
+		doc := Document{ID: ID, Content: asJSON}
 
 		j, _ := doc.MarshalJSON()
 		err := b.Put([]byte(ID), j)
@@ -392,7 +334,7 @@ func (db *Gomenasai) Insert(value interface{}) (res string, err error) {
 }
 
 // Get retuns a Document specified by the DocumentID
-func (db *Gomenasai) Get(id string) (*chunk.Document, error) {
+func (db *Gomenasai) Get(id string) (*Document, error) {
 	//idElems := strings.Split(id, "$")
 	//if len(idElems) != 2 {
 	//	return nil, fmt.Errorf("invalid document ID '%v'", id)
@@ -405,7 +347,7 @@ func (db *Gomenasai) Get(id string) (*chunk.Document, error) {
 	//}
 	//return res.Content.(*chunk.Document), res.Error
 
-	toRet := chunk.Document{}
+	toRet := Document{}
 	_ = db.bolt.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("default"))
 		toRet = Byte2Document(b.Get([]byte(id)))
@@ -458,7 +400,7 @@ func (db *Gomenasai) Update(docId string, content interface{}) error {
 
 		asJSON, _ := json.Marshal(content)
 
-		doc := chunk.Document{ID: docId, Content: asJSON}
+		doc := Document{ID: docId, Content: asJSON}
 
 		j, _ := doc.MarshalJSON()
 		err := b.Put([]byte(docId), j)
@@ -500,8 +442,16 @@ func (db *Gomenasai) Commit() {
 // Close closes all of the running services and commits everything to disk.
 func (db *Gomenasai) Close() {
 	db.Commit()
-	db.bolt.Close()
-	db.searchEngine.Close()
+
+	err := db.bolt.Close()
+	if err != nil {
+		panic(fmt.Errorf("failed to commit database: %v", err))
+	}
+
+	err = db.searchEngine.Close()
+	if err != nil {
+		panic(fmt.Errorf("failed to close searchEngine: %v", err))
+	}
 }
 
 // Size returns the size of the current database.
@@ -531,23 +481,4 @@ func doesFileExist(name string) bool {
 		}
 	}
 	return true
-}
-
-func inStrArray(array []string, str string) bool {
-	for _, elem := range array {
-		if elem == str {
-			return true
-		}
-	}
-	return false
-}
-
-// Checks if it's actually an error
-func isActuallyAnError(err error) bool {
-	if err != nil {
-		if err.Error() != "not an error" {
-			return true
-		}
-	}
-	return false
 }

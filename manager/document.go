@@ -1,5 +1,9 @@
 package gomenasai
 
+import (
+	"fmt"
+)
+
 type Document struct {
 	ID      string `json:"id"`
 	Content []byte `json:"body"`
@@ -8,15 +12,19 @@ type Document struct {
 }
 
 // Export exports the Document to a specified interface, like json.Unmarshal
-func (d *Document) Export(interf interface{}) {
-	json.Unmarshal(d.Content, interf)
+func (d *Document) Export(interf interface{}) error {
+	return json.Unmarshal(d.Content, interf)
 }
 
 // ExportI returns the document as an interface{}, cast it using `result.(OriginalType)`
 func (d *Document) ExportI() map[string]interface{} {
 	if d.mapping == nil {
 		d.mapping = make(map[string]interface{})
-		json.Unmarshal(d.Content, &d.mapping)
+
+		err := json.Unmarshal(d.Content, &d.mapping)
+		if err != nil {
+			fmt.Println("ExportI: failed to unmarshal: ", err)
+		}
 	}
 	return d.mapping
 }

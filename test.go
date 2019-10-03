@@ -61,7 +61,6 @@ func main2() {
 		panic(err)
 	}
 
-	fmt.Println(manager.ChunkPaths)
 	result := manager.Search("watch")
 
 	for _, doc := range result.Documents {
@@ -80,10 +79,9 @@ func main2() {
 func main() {
 	// manager := chunk.ChunkManager{}
 	manager, err := gomenasai.New(&gomenasai.GomenasaiConfig{
-		Name:           "TestDB",
-		Path:           "testDB",
-		ChunkSizeLimit: 8000,
-		IndexPaths:     []string{"$.title", "$.description"},
+		Name:       "TestDB",
+		Path:       "testDB",
+		IndexPaths: []string{"$.title", "$.description"},
 	})
 
 	if err != nil {

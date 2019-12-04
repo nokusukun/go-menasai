@@ -22,6 +22,10 @@ import (
 
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
+const (
+	AutoIDGen string = "gomenasai@generate"
+)
+
 // GomenasaiConfig is passed to gomenasai.New
 type GomenasaiConfig struct {
 	Name       string   `json:"name"`
@@ -288,12 +292,12 @@ func (db *Gomenasai) InsertIndex(ID string, asJSON []byte) {
 }
 
 // Insert inserts a struct to the database and adds the document to the index.
-func (db *Gomenasai) Insert(value interface{}) (res string, err error) {
+func (db *Gomenasai) Insert(ID string, value interface{}) (res string, err error) {
 	//db.lock.Lock()
 	//activeChunk := db.chunks[db.ActiveChunk]
 	//res, asJSON, err := activeChunk.Insert(value)
 	//db.lock.Unlock()
-	var ID string
+	// var ID string
 
 	asJSON, err := json.Marshal(value)
 	if err != nil {
@@ -302,8 +306,10 @@ func (db *Gomenasai) Insert(value interface{}) (res string, err error) {
 
 	err = db.bolt.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("default"))
-		nextseq, _ := b.NextSequence()
-		ID = strconv.FormatUint(nextseq, 32)
+		if ID == AutoIDGen {
+			nextseq, _ := b.NextSequence()
+			ID = strconv.FormatUint(nextseq, 32)
+		}
 		doc := Document{ID: ID, Content: asJSON}
 
 		j, _ := doc.MarshalJSON()

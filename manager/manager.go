@@ -354,14 +354,17 @@ func (db *Gomenasai) Get(id string) (*Document, error) {
 	//return res.Content.(*chunk.Document), res.Error
 
 	toRet := Document{}
-	_ = db.bolt.View(func(tx *bolt.Tx) error {
+	err := db.bolt.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("default"))
-		toRet = Byte2Document(b.Get([]byte(id)))
-
+		bodyBytes := b.Get([]byte(id))
+		toRet = Byte2Document(bodyBytes)
+		if len(bodyBytes) == 0 {
+			return fmt.Errorf("document not found")
+		}
 		return nil
 	})
 
-	return &toRet, nil
+	return &toRet, err
 }
 
 // Delete deletes a document specified by the document ID
